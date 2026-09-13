@@ -258,7 +258,17 @@ journalctl -u number-scrap-daily -n 100 --no-pager
 ```bash
 node -v                                  # v24
 systemctl is-active number-scrap-web     # active
-curl -sI http://127.0.0.1:3000 | head -1 # 401 (basic auth aktif)
+
+# ambil PORT + kredensial dari .env (jangan tulis password literal)
+PORT=$(grep -m1 '^PORT=' .env | cut -d= -f2-)
+U=$(grep -m1 '^DASH_USER=' .env | cut -d= -f2-)
+P=$(grep -m1 '^DASH_PASS=' .env | cut -d= -f2-)
+
+curl -sI "http://127.0.0.1:$PORT" | head -1              # 401 (belum auth)
+curl -sI -u "$U:$P" "http://127.0.0.1:$PORT" | head -1   # 200 (auth benar)
+
 ig/venv/bin/python ig/ig_check.py <akun> # data profil keluar
 npm run cli -- stats
 ```
+
+> Port dashboard **tidak harus 3000**. Kalau 3000 dipakai app lain (mis. PM2), biarkan; cukup pastikan `PORT` di `.env` = angka yang dipakai `reverse_proxy` di Caddy.
