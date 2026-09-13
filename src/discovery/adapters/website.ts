@@ -1,14 +1,13 @@
 import type { Candidate } from '../../types.ts';
 import { UA } from '../../http.ts';
 import { parsePageText } from '../../enrich/bio-parse.ts';
-import { webSearch } from '../web-search.ts';
+import { webSearch, isSearchJunk } from '../web-search.ts';
 
 const SKIP_HOSTS = [
   'instagram.com',
   'facebook.com',
   'youtube.com',
   'tiktok.com',
-  'google.com',
   'wikipedia.org',
   'linkedin.com',
   'tokopedia.com',
@@ -20,6 +19,7 @@ const SKIP_HOSTS = [
 ];
 
 function skip(url: string): boolean {
+  if (isSearchJunk(url)) return true;
   try {
     const host = new URL(url).hostname.replace(/^www\./, '');
     return SKIP_HOSTS.some((d) => host === d || host.endsWith('.' + d));

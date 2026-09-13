@@ -1,4 +1,4 @@
-export type Source = 'instagram' | 'google-maps' | 'website' | 'forum';
+export type Source = 'instagram' | 'google-maps' | 'osm' | 'website' | 'forum';
 
 export type Candidate = {
   source: Source;

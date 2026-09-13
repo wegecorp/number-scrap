@@ -3,6 +3,7 @@ import type { Candidate, ExpandedQuery } from '../types.ts';
 import { extraQueriesFromSeeds } from '../ai/expand.ts';
 import { fetchInstagramProfile, findHandles, mentionsFromBio } from './adapters/instagram.ts';
 import { searchPlaces } from './adapters/google-maps.ts';
+import { searchOsm } from './adapters/osm.ts';
 import { searchContactSites } from './adapters/website.ts';
 
 function mapsTerms(q: ExpandedQuery): string[] {
@@ -29,13 +30,26 @@ function websiteQueries(q: ExpandedQuery): string[] {
   return [`"${key}" kontak`, `"${key}" alamat telepon email`];
 }
 
-async function fetchProfiles(handles: string[], limit: number, label: string): Promise<Candidate[]> {
+type IgState = { blocked: boolean; streak: number };
+
+async function fetchProfiles(handles: string[], limit: number, label: string, ig: IgState): Promise<Candidate[]> {
   const out: Candidate[] = [];
+  if (ig.blocked) return out;
   for (const h of handles.slice(0, limit)) {
     try {
       out.push(await fetchInstagramProfile(h));
+      ig.streak = 0;
     } catch (err) {
-      console.warn(`[${label}] ${h}: ${(err as Error).message}`);
+      const msg = (err as Error).message;
+      console.warn(`[${label}] ${h}: ${msg}`);
+      if (msg.includes('429')) {
+        ig.streak++;
+        if (ig.streak >= 3) {
+          ig.blocked = true;
+          console.warn('[ig] 429 berulang 3x -> hentikan fetch profil IG untuk run ini (IP kena rate limit).');
+          break;
+        }
+      }
       out.push({ source: 'instagram', handle: h, name: h, url: `https://www.instagram.com/${h}` });
     }
   }
@@ -53,8 +67,18 @@ function dedupe(cands: Candidate[]): Candidate[] {
   return [...seen.values()];
 }
 
-export async function discover(q: ExpandedQuery): Promise<Candidate[]> {
+export async function discover(q: ExpandedQuery, options: { limit?: number } = {}): Promise<Candidate[]> {
   const out: Candidate[] = [];
+  const igLimit = options.limit && options.limit > 0 ? options.limit : 40;
+  let igFetched = 0;
+  const igState: IgState = { blocked: false, streak: 0 };
+  const remaining = (): number => Math.max(0, igLimit - igFetched);
+  const takeProfiles = async (handles: string[], label: string): Promise<Candidate[]> => {
+    const slice = handles.slice(0, remaining());
+    const profs = await fetchProfiles(slice, slice.length, label, igState);
+    igFetched += slice.length;
+    return profs;
+  };
 
   if (hasMaps) {
     for (const term of mapsTerms(q)) {
@@ -68,20 +92,33 @@ export async function discover(q: ExpandedQuery): Promise<Candidate[]> {
     }
   }
 
-  const handles = await findHandles(q.googleQueries);
-  console.log(`[ig] kandidat akun: ${handles.length}`);
-  out.push(...(await fetchProfiles(handles, 40, 'ig')));
+  if (config.osmEnabled) {
+    for (const term of mapsTerms(q)) {
+      try {
+        const places = await searchOsm(term);
+        out.push(...places);
+        console.log(`[osm] "${term}" -> ${places.length}`);
+      } catch (err) {
+        console.warn(`[osm] "${term}" gagal: ${(err as Error).message}`);
+      }
+    }
+  }
 
-  const tQueries = tournamentQueries(q);
-  const tournamentHandles = (await findHandles(tQueries, 15)).filter((h) => !handles.includes(h));
-  if (tournamentHandles.length) {
-    console.log(`[turnamen] akun event: ${tournamentHandles.length}`);
-    const profs = await fetchProfiles(tournamentHandles, 8, 'turnamen');
-    const teamHandles = new Set<string>();
-    for (const p of profs) for (const h of mentionsFromBio(p.bio ?? '')) teamHandles.add(h);
-    const teams = [...teamHandles].filter((h) => !handles.includes(h));
-    console.log(`[turnamen] tim dari tag: ${teams.length}`);
-    out.push(...(await fetchProfiles(teams, 40, 'tim')));
+  const handles = await findHandles(q.googleQueries);
+  console.log(`[ig] kandidat akun: ${handles.length} (fetch dibatasi ${igLimit})`);
+  out.push(...(await takeProfiles(handles, 'ig')));
+
+  if (remaining() > 0) {
+    const tournamentHandles = (await findHandles(tournamentQueries(q), 15)).filter((h) => !handles.includes(h));
+    if (tournamentHandles.length) {
+      console.log(`[turnamen] akun event: ${tournamentHandles.length}`);
+      const profs = await takeProfiles(tournamentHandles.slice(0, 8), 'turnamen');
+      const teamHandles = new Set<string>();
+      for (const p of profs) for (const h of mentionsFromBio(p.bio ?? '')) teamHandles.add(h);
+      const teams = [...teamHandles].filter((h) => !handles.includes(h));
+      console.log(`[turnamen] tim dari tag: ${teams.length}`);
+      out.push(...(await takeProfiles(teams, 'tim')));
+    }
   }
 
   const wQueries = websiteQueries(q);
@@ -91,13 +128,13 @@ export async function discover(q: ExpandedQuery): Promise<Candidate[]> {
     out.push(...sites);
   }
 
-  if (hasAI && config.seedExpansion > 0) {
+  if (hasAI && config.seedExpansion > 0 && remaining() > 0 && !igState.blocked) {
     const seeds = out.filter((o) => o.name).map((o) => ({ name: o.name, bio: o.bio }));
     const extra = await extraQueriesFromSeeds(q, seeds);
     if (extra.length) {
       console.log(`[ai] seed expansion +${extra.length} query`);
       const h2 = (await findHandles(extra)).filter((h) => !handles.includes(h));
-      out.push(...(await fetchProfiles(h2, 40, 'ig-expand')));
+      out.push(...(await takeProfiles(h2, 'ig-expand')));
     }
   }
 

@@ -21,6 +21,8 @@ keyword -> AI expand -> discovery -> enrich -> AI skor -> draft pesan -> klik Ch
 ```bash
 npm install
 Copy-Item .env.example .env   # lalu isi key
+npm run cli -- models         # cari AI_MODEL yang benar
+npm run cli -- ping-ai        # pastikan koneksi AI jalan
 npm run cli -- stats
 ```
 
@@ -28,17 +30,22 @@ npm run cli -- stats
 
 | Variabel | Fungsi |
 |---|---|
-| `GOOGLE_MAPS_API_KEY` | sumber nomor teraman (API resmi) |
-| `IG_SESSIONID` | cookie IG burner; tanpa ini baca profil publik sering 429 |
-| `AI_API_KEY` | skor, seed expansion, susun pesan (OpenAI-compatible) |
-| `AI_BASE_URL`, `AI_MODEL` | endpoint + model AI |
+| `OFFER` | produk/jasa yang kamu jual (menentukan skor AI + isi pesan) |
+| `IG_SESSIONID` | cookie IG burner; tanpa ini profil IG balas 429 |
+| `IG_FETCH_DELAY_MS` | jeda antar-fetch profil IG (naikkan kalau kena limit) |
+| `OSM_ENABLED` | OpenStreetMap/Nominatim — gratis tanpa key (hasil tipis, bonus) |
+| `GOOGLE_MAPS_API_KEY` | Places API (New) — opsional, butuh kartu kredit |
+| `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` | endpoint AI (OpenAI-compatible, mis. sumopod) |
+| `AI_JSON_MODE` | `auto` (aman) / `on` / `off` |
 | `MIN_SCORE` | ambang lead dianggap layak |
 
 ## Perintah
 
 ```bash
+npm run cli -- models                  # daftar model AI tersedia
+npm run cli -- ping-ai                 # cek koneksi AI + mode JSON
 npm run cli -- expand "<intent>"       # lihat hasil AI expand
-npm run cli -- discover "SSB Bandung"  # cari + enrich + simpan
+npm run cli -- discover "SSB Bandung" [--limit N]   # cari + enrich + simpan
 npm run cli -- score                   # skor AI
 npm run cli -- draft                   # susun pesan
 npm run cli -- contacts                # lead siap dihubungi + link wa.me

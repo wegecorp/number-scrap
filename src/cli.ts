@@ -15,11 +15,33 @@ import {
 import type { LeadRecord } from './types.ts';
 import { expandQuery } from './ai/expand.ts';
 import { scoreLeads } from './ai/score.ts';
+import { listModels, pingAI } from './ai/client.ts';
 import { discover } from './discovery/index.ts';
 import { enrichContact } from './enrich/index.ts';
 import { draftMessage } from './outreach/draft.ts';
 import { chatLink } from './outreach/chat-link.ts';
 import { leadsToCsv } from './export/csv.ts';
+
+function parseArgs(args: string[]): { positional: string[]; flags: Record<string, string | true> } {
+  const positional: string[] = [];
+  const flags: Record<string, string | true> = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith('--')) {
+      const key = a.slice(2);
+      const next = args[i + 1];
+      if (next && !next.startsWith('--')) {
+        flags[key] = next;
+        i++;
+      } else {
+        flags[key] = true;
+      }
+    } else {
+      positional.push(a);
+    }
+  }
+  return { positional, flags };
+}
 
 async function cmdExpand(intent: string): Promise<void> {
   const q = await expandQuery(intent);
@@ -27,7 +49,7 @@ async function cmdExpand(intent: string): Promise<void> {
   if (q.tooBroad) console.log('\n! Intent terlalu luas. Tambahkan tipe target (SSB/klub/tim) dan kota.');
 }
 
-async function cmdDiscover(intent: string): Promise<void> {
+async function cmdDiscover(intent: string, limit?: number): Promise<void> {
   const q = await expandQuery(intent);
   if (q.tooBroad) {
     console.log('! Intent terlalu luas. Tambahkan tipe target + kota, contoh: "SSB Bandung".');
@@ -35,7 +57,7 @@ async function cmdDiscover(intent: string): Promise<void> {
   }
   const campaignId = createCampaign(intent.slice(0, 60), intent, q);
 
-  const candidates = await discover(q);
+  const candidates = await discover(q, { limit });
   console.log(`[discover] kandidat: ${candidates.length}`);
 
   const seen = new Set<number>();
@@ -124,6 +146,29 @@ function cmdExport(path = 'leads.csv', onlyNew = false): void {
   console.log(`[export] ${path}${onlyNew ? ' (hanya belum dihubungi)' : ''}`);
 }
 
+async function cmdModels(): Promise<void> {
+  try {
+    const models = await listModels();
+    console.log(`[models] ${models.length} model dari ${config.ai.baseUrl}`);
+    for (const m of models) console.log(`  ${m}`);
+    console.log('\nSet AI_MODEL ke salah satu id di atas.');
+  } catch (err) {
+    console.error(`[models] gagal: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+}
+
+async function cmdPingAI(): Promise<void> {
+  console.log(`[ping-ai] base=${config.ai.baseUrl} model=${config.ai.model} jsonMode=${config.ai.jsonMode}`);
+  try {
+    const r = await pingAI();
+    console.log(`[ping-ai] OK · mode=${r.mode} · reply=${r.text.trim().slice(0, 120)}`);
+  } catch (err) {
+    console.error(`[ping-ai] gagal: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+}
+
 function cmdStats(): void {
   const total = db.prepare('SELECT COUNT(*) AS n FROM leads').get() as { n: number };
   const withPhone = db.prepare('SELECT COUNT(*) AS n FROM leads WHERE phone IS NOT NULL').get() as { n: number };
@@ -137,29 +182,40 @@ function cmdStats(): void {
 }
 
 function usage(): void {
-  console.log(`ig-selling — scraper lead tim olahraga (tanpa WhatsApp otomatis)
+  console.log(`ig-selling — scraper lead tim olahraga (kontak via wa.me, bukan bot)
 
-  npm run cli -- expand   "<intent>"     lihat query hasil AI
-  npm run cli -- discover "<intent>"     cari + enrich + simpan lead
-  npm run cli -- score                   skor lead pakai AI
-  npm run cli -- draft                   susun pesan siap kirim
-  npm run cli -- contacts                tampilkan lead siap dihubungi + link wa.me
-  npm run cli -- mark <id...>            tandai sudah dihubungi
-  npm run cli -- suppress <nomor> [note] masukkan ke DNC list
-  npm run cli -- export [file] [--new]   export CSV (--new = belum dihubungi)
-  npm run cli -- stats                   ringkasan database
+  npm run cli -- models                   daftar model AI yang tersedia
+  npm run cli -- ping-ai                  cek koneksi AI + mode JSON
+  npm run cli -- expand   "<intent>"      lihat query hasil AI
+  npm run cli -- discover "<intent>" [--limit N]   cari + enrich + simpan lead
+  npm run cli -- score                    skor lead pakai AI
+  npm run cli -- draft                    susun pesan siap kirim
+  npm run cli -- contacts                 lead siap dihubungi + link wa.me
+  npm run cli -- mark <id...>             tandai sudah dihubungi
+  npm run cli -- suppress <nomor> [note]  masukkan ke DNC list
+  npm run cli -- export [file] [--new]    export CSV (--new = belum dihubungi)
+  npm run cli -- stats                    ringkasan database
 `);
 }
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2);
+  const { positional, flags } = parseArgs(rest);
   switch (cmd) {
+    case 'models':
+      await cmdModels();
+      break;
+    case 'ping-ai':
+      await cmdPingAI();
+      break;
     case 'expand':
-      await cmdExpand(rest.join(' '));
+      await cmdExpand(positional.join(' '));
       break;
-    case 'discover':
-      await cmdDiscover(rest.join(' '));
+    case 'discover': {
+      const limit = typeof flags.limit === 'string' ? Number(flags.limit) : undefined;
+      await cmdDiscover(positional.join(' '), limit && Number.isFinite(limit) ? limit : undefined);
       break;
+    }
     case 'score':
       await cmdScore();
       break;
@@ -170,16 +226,14 @@ async function main(): Promise<void> {
       cmdContacts();
       break;
     case 'mark':
-      cmdMark(rest);
+      cmdMark(positional);
       break;
     case 'suppress':
-      cmdSuppress(rest);
+      cmdSuppress(positional);
       break;
-    case 'export': {
-      const onlyNew = rest.includes('--new');
-      cmdExport(rest.find((r) => !r.startsWith('--')) ?? 'leads.csv', onlyNew);
+    case 'export':
+      cmdExport(positional[0] ?? 'leads.csv', flags.new === true);
       break;
-    }
     case 'stats':
       cmdStats();
       break;

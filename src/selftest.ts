@@ -5,6 +5,8 @@ import { heuristicExpand } from './ai/expand.ts';
 import { fillTemplate, templateFor } from './outreach/templates.ts';
 import { chatLink } from './outreach/chat-link.ts';
 import { mentionsFromBio } from './discovery/adapters/instagram.ts';
+import { mapOsmResult } from './discovery/adapters/osm.ts';
+import { isSearchJunk } from './discovery/web-search.ts';
 
 let pass = 0;
 function test(name: string, fn: () => void): void {
@@ -73,6 +75,28 @@ test('chatLink tanpa pesan', () => {
 test('mentionsFromBio ambil tag, buang reserved', () => {
   const out = mentionsFromBio('Tim peserta @ssbgaruda @garuda_muda follow @p @reels');
   assert.deepEqual(out, ['ssbgaruda', 'garuda_muda']);
+});
+test('mapOsmResult: petakan phone/kota/source', () => {
+  const c = mapOsmResult({
+    osm_type: 'node',
+    osm_id: 42,
+    name: 'SSB Garuda',
+    address: { city: 'Bandung' },
+    extratags: { phone: '0812-3456-7890', website: 'https://ssbgaruda.id' },
+  });
+  assert.equal(c?.source, 'osm');
+  assert.equal(c?.phone, '+6281234567890');
+  assert.equal(c?.city, 'Bandung');
+  assert.equal(c?.handle, 'osm:node:42');
+});
+test('mapOsmResult: tanpa nama -> null', () => {
+  assert.equal(mapOsmResult({ osm_type: 'node', osm_id: 1 }), null);
+});
+test('isSearchJunk buang host pencarian, simpan situs biasa', () => {
+  assert.equal(isSearchJunk('https://www.w3.org/TR/'), true);
+  assert.equal(isSearchJunk('https://duckduckgo.com/'), true);
+  assert.equal(isSearchJunk('https://web.archive.org/web/x'), true);
+  assert.equal(isSearchJunk('https://ssbgaruda.id/kontak'), false);
 });
 
 console.log(`\n${pass} check lulus${process.exitCode ? ' (ada gagal)' : ''}`);

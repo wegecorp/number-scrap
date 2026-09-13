@@ -19,15 +19,20 @@ export const config = {
   seedExpansion: Number(env('AI_SEED_EXPANSION', '1')),
   minScore: Number(env('MIN_SCORE', '60')),
   offer: env('OFFER', 'perlengkapan tim olahraga'),
-  searchProvider: env('SEARCH_PROVIDER', 'duckduckgo'),
+  searchProvider: env('SEARCH_PROVIDER', 'auto'),
+  searxngUrl: env('SEARXNG_URL', 'https://opnxng.com'),
   googleCseKey: env('GOOGLE_CSE_KEY'),
   googleCseCx: env('GOOGLE_CSE_CX'),
   googleMapsKey: env('GOOGLE_MAPS_API_KEY'),
   igSessionId: env('IG_SESSIONID'),
+  igFetchDelayMs: Number(env('IG_FETCH_DELAY_MS', '2500')),
+  osmEnabled: env('OSM_ENABLED', '1') !== '0',
+  osmUserAgent: env('OSM_UA', 'number-scrap/0.1 (+https://github.com/wegecorp/number-scrap)'),
   ai: {
     key: env('AI_API_KEY'),
-    baseUrl: env('AI_BASE_URL', 'https://api.deepseek.com/v1').replace(/\/+$/, ''),
-    model: env('AI_MODEL', 'deepseek-chat'),
+    baseUrl: env('AI_BASE_URL', 'https://ai.sumopod.com/v1').replace(/\/+$/, ''),
+    model: env('AI_MODEL', 'deepseek-v4-flash'),
+    jsonMode: env('AI_JSON_MODE', 'auto') as 'auto' | 'on' | 'off',
   },
 };
 
