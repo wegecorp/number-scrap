@@ -116,9 +116,7 @@ function layout(title: string, body: string): string {
  .pg:hover{background:var(--pink-soft)}
  .pg.off{opacity:.4}
  .pager a b,.pager b{color:var(--pink)}
- td:first-child,th:first-child{width:40px}
  input[type=checkbox]{width:18px;height:18px;accent-color:var(--pink);cursor:pointer;vertical-align:-3px}
- tbody tr:has(input[name="ids"]:checked){background:var(--pink-soft)}
  .chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--pink-soft);border:1px solid var(--pink);color:var(--ink);border-radius:9999px;padding:5px 12px;font-size:13px;text-decoration:none}
  .chip .x{color:var(--pink);font-weight:700}
@@ -126,7 +124,22 @@ function layout(title: string, body: string): string {
  .selbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:10px 14px;margin-bottom:12px}
  .selcount{font-weight:600;color:var(--ink);margin-right:auto}
  button[disabled]{opacity:.4;cursor:not-allowed;filter:none}
- .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+ .ibtn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border-radius:9999px}
+ a.chat.ibtn{padding:0;width:38px;height:38px}
+ .ibtn svg{width:18px;height:18px;pointer-events:none}
+ .selallwrap{display:flex;align-items:center;gap:6px;color:var(--body);font-size:14px;cursor:pointer;white-space:nowrap}
+ .lead{background:var(--canvas);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:8px;overflow:hidden}
+ .lead:has(input[name="ids"]:checked){background:var(--pink-soft)}
+ .lead>summary{cursor:pointer;list-style:none;display:flex;gap:12px;align-items:center;padding:12px 14px}
+ .lead>summary::-webkit-details-marker{display:none}
+ .lead>summary::after{content:"▾";margin-left:auto;color:var(--muted);font-size:12px;transition:transform .15s}
+ .lead[open]>summary::after{transform:rotate(180deg)}
+ .leadname{font-weight:600;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .leadphone{color:var(--body);white-space:nowrap}
+ .leaddetail{padding:0 14px 14px 14px;display:grid;gap:8px}
+ .field{display:flex;gap:10px;font-size:14px}
+ .field .k{color:var(--muted);flex:0 0 88px}
+ .leadact{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
  @media(max-width:640px){
   main{padding:16px}
   header{min-height:auto;padding:10px 14px;gap:4px}
@@ -145,6 +158,7 @@ function layout(title: string, body: string): string {
   .pgrow{justify-content:space-between}
   .pg{flex:1;text-align:center;min-height:40px}
   a.chat{display:block;text-align:center;min-height:44px}
+  .ibtn,a.chat.ibtn{display:inline-flex;width:44px;height:44px;min-height:44px}
  }
 </style></head><body>
 <header>
@@ -161,18 +175,21 @@ function layout(title: string, body: string): string {
 </body></html>`;
 }
 
-function previewMsg(s: string | null, words = 6): string {
-  const parts = (s ?? '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= words) return parts.join(' ');
-  return parts.slice(0, words).join(' ') + ' …';
-}
-
 function scoreClass(s: number | null): string {
   if (s == null) return 'low';
   if (s >= 70) return 'ok';
   if (s >= 40) return 'mid';
   return 'low';
 }
+
+const ICON = {
+  chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  ban: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+  trash: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',
+};
+const icon = (n: keyof typeof ICON): string =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
 export function leadsPage(rows: Row[], opts: PageOpts): string {
   const f = opts.filters;
@@ -229,36 +246,38 @@ ${chips.length ? `<div class="chips">${chips.join('')}<a class="chip" href="/">r
 </details>
 <form method="post" action="/bulk">
 <div class="selbar">
+ <label class="selallwrap"><input type="checkbox" id="selall"/> pilih semua</label>
  <span class="selcount" id="selcount">0 dipilih</span>
- <button type="submit" name="action" value="contacted" data-needsel>Tandai terpilih</button>
- <button type="submit" name="action" value="delete" class="danger" data-needsel onclick="return confirm('Hapus permanen yang terpilih?')">Hapus terpilih</button>
- <button type="submit" name="action" value="block" class="ghost" data-needsel onclick="return confirm('Blokir & hapus yang terpilih?')">Blokir terpilih</button>
+ <button type="submit" name="action" value="contacted" data-needsel aria-label="Tandai terpilih" title="Tandai terpilih">${icon('check')}</button>
+ <button type="submit" name="action" value="block" class="ghost" data-needsel aria-label="Blokir terpilih" title="Blokir terpilih" onclick="return confirm('Blokir & hapus yang terpilih?')">${icon('ban')}</button>
+ <button type="submit" name="action" value="delete" class="danger" data-needsel aria-label="Hapus terpilih" title="Hapus terpilih" onclick="return confirm('Hapus permanen yang terpilih?')">${icon('trash')}</button>
 </div>
 ${pager(f, opts.page ?? 1, opts.perPage ?? 25, opts.total ?? rows.length)}
-<table>
-<thead><tr><th><input type="checkbox" id="selall" aria-label="pilih semua di halaman ini"/></th><th>Skor</th><th>Nama</th><th>Nomor</th><th>Sumber</th><th>Kota</th><th>Campaign</th><th>Pesan</th><th>Aksi</th></tr></thead>
-<tbody>
 ${rows
   .map(
-    (r) => `<tr>
- <td data-label=""><input type="checkbox" name="ids" value="${r.id}" aria-label="pilih ${esc(r.name)}"/></td>
- <td data-label="Skor" class="score ${scoreClass(r.score)}">${r.score ?? '-'}</td>
- <td data-label="Nama">${esc(r.name)}${r.handle ? ` <span class="muted">@${esc(r.handle)}</span>` : ''}</td>
- <td data-label="Nomor">${r.phone ? esc(r.phone) : '<span class="muted">-</span>'}</td>
- <td data-label="Sumber">${esc(r.source)}</td>
- <td data-label="Kota">${esc(r.city)}</td>
- <td data-label="Campaign" class="muted">${esc(r.campaign ?? '')}</td>
- <td data-label="Pesan" class="msg muted">${esc(previewMsg(r.suggested_message))}</td>
- <td data-label="Aksi">
-  ${r.phone && !r.contacted_at ? `<a class="chat" target="_blank" href="${esc(chatLink(r.phone, r.suggested_message))}">Chat</a>` : ''}
-  ${r.contacted_at ? `<span class="ok">sudah</span>` : `<button class="ghost" type="submit" formaction="/contacted" name="id" value="${r.id}">Tandai</button>`}
-  <button class="ghost" type="submit" formaction="/block" name="id" value="${r.id}" onclick="return confirm('Blokir & hapus?')">Blokir</button>
-  <button class="danger" type="submit" formaction="/delete" name="id" value="${r.id}" onclick="return confirm('Hapus permanen?')">Hapus</button>
- </td>
-</tr>`,
+    (r) => `<details class="lead">
+ <summary>
+  <input type="checkbox" name="ids" value="${r.id}" aria-label="pilih ${esc(r.name)}"/>
+  <span class="score ${scoreClass(r.score)}">${r.score ?? '-'}</span>
+  <span class="leadname">${esc(r.name)}${r.handle ? ` <span class="muted">@${esc(r.handle)}</span>` : ''}</span>
+  <span class="leadphone">${r.phone ? esc(r.phone) : '<span class="muted">-</span>'}</span>
+ </summary>
+ <div class="leaddetail">
+  <div class="field"><span class="k">Sumber</span><span>${esc(r.source) || '-'}</span></div>
+  <div class="field"><span class="k">Kota</span><span>${esc(r.city) || '-'}</span></div>
+  <div class="field"><span class="k">Campaign</span><span class="muted">${esc(r.campaign ?? '') || '-'}</span></div>
+  <div class="field"><span class="k">Pesan</span><span class="msg">${esc(r.suggested_message) || '-'}</span></div>
+  ${r.reason ? `<div class="field"><span class="k">Alasan skor</span><span class="muted">${esc(r.reason)}</span></div>` : ''}
+  <div class="leadact">
+   ${r.phone && !r.contacted_at ? `<a class="ibtn chat" target="_blank" href="${esc(chatLink(r.phone, r.suggested_message))}" aria-label="Chat WhatsApp" title="Chat WhatsApp">${icon('chat')}</a>` : ''}
+   ${r.contacted_at ? '<span class="ok">sudah dihubungi</span>' : `<button class="ibtn ghost" type="submit" formaction="/contacted" name="id" value="${r.id}" aria-label="Tandai sudah dihubungi" title="Tandai sudah dihubungi">${icon('check')}</button>`}
+   <button class="ibtn ghost" type="submit" formaction="/block" name="id" value="${r.id}" aria-label="Blokir & hapus" title="Blokir & hapus" onclick="return confirm('Blokir & hapus?')">${icon('ban')}</button>
+   <button class="ibtn danger" type="submit" formaction="/delete" name="id" value="${r.id}" aria-label="Hapus permanen" title="Hapus permanen" onclick="return confirm('Hapus permanen?')">${icon('trash')}</button>
+  </div>
+ </div>
+</details>`,
   )
   .join('')}
-</tbody></table>
 </form>
 <script>
 (function(){
