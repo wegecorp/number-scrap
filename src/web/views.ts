@@ -118,6 +118,12 @@ function layout(title: string, body: string): string {
 </body></html>`;
 }
 
+function previewMsg(s: string | null, words = 6): string {
+  const parts = (s ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= words) return parts.join(' ');
+  return parts.slice(0, words).join(' ') + ' …';
+}
+
 function scoreClass(s: number | null): string {
   if (s == null) return 'low';
   if (s >= 70) return 'ok';
@@ -176,7 +182,7 @@ ${rows
  <td data-label="Sumber">${esc(r.source)}</td>
  <td data-label="Kota">${esc(r.city)}</td>
  <td data-label="Campaign" class="muted">${esc(r.campaign ?? '')}</td>
- <td data-label="Pesan" class="msg muted">${esc(r.suggested_message ?? '')}</td>
+ <td data-label="Pesan" class="msg muted">${esc(previewMsg(r.suggested_message))}</td>
  <td data-label="Aksi">
   ${r.phone && !r.contacted_at ? `<a class="chat" target="_blank" href="${esc(chatLink(r.phone, r.suggested_message))}">Chat</a>` : ''}
   ${r.contacted_at ? `<span class="ok">sudah</span>` : `<button class="ghost" type="submit" formaction="/contacted" name="id" value="${r.id}">Tandai</button>`}
