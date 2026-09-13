@@ -1,61 +1,43 @@
 import express from 'express';
 import { config } from '../config.ts';
-import { db, getLead, getScore, createMessage, hasMessage, isSuppressed, listMessages, approveMessage, approveAllDrafts } from '../db/index.ts';
+import { db, getScore, setSuggestedMessage, markContacted } from '../db/index.ts';
 import { draftMessage } from '../outreach/draft.ts';
 import { leadsToCsv } from '../export/csv.ts';
-import { leadsPage, messagesPage, repliesPage } from './views.ts';
+import { leadsPage } from './views.ts';
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 
-app.get('/', (_req, res) => {
-  const rows = db
-    .prepare(
-      `SELECT l.*, s.score, s.reason, s.segment FROM leads l
+app.get('/', (req, res) => {
+  const filter = String(req.query.filter ?? '');
+  const sql = `SELECT l.*, s.score, s.reason, s.segment FROM leads l
        LEFT JOIN scores s ON s.lead_id = l.id
-       ORDER BY COALESCE(s.score,0) DESC, l.id DESC LIMIT 500`,
-    )
-    .all() as unknown as Array<Record<string, unknown>>;
-  res.send(leadsPage(rows as never));
+       ${filter === 'new' ? 'WHERE l.contacted_at IS NULL AND l.phone IS NOT NULL' : ''}
+       ORDER BY COALESCE(s.score,0) DESC, l.id DESC LIMIT 500`;
+  const rows = db.prepare(sql).all() as unknown as Array<Record<string, unknown>>;
+  res.send(leadsPage(rows as never, filter));
 });
 
 app.post('/draft', async (req, res) => {
-  const ids: number[] = ([] as unknown[]).concat(req.body.ids ?? []).map(Number).filter((n) => Number.isFinite(n));
-  let made = 0;
-  for (const id of ids) {
-    const lead = getLead(id);
-    if (!lead || isSuppressed(lead.phone) || hasMessage(id)) continue;
-    const s = getScore(id);
-    if ((s?.score ?? 0) < config.minScore) continue;
-    const body = await draftMessage(lead, s?.template_id);
-    createMessage(id, body);
-    made++;
-  }
-  res.redirect(made ? '/messages' : '/');
-});
-
-app.get('/messages', (_req, res) => {
-  res.send(messagesPage(listMessages()));
-});
-
-app.post('/approve', (req, res) => {
-  if (req.body.all) {
-    const n = approveAllDrafts(config.minScore);
-    console.log(`[web] approve semua: ${n}`);
-  } else if (req.body.id) {
-    approveMessage(Number(req.body.id));
-  }
-  res.redirect('/messages');
-});
-
-app.get('/replies', (_req, res) => {
-  const rows = db
+  const leads = db
     .prepare(
-      `SELECT r.id, r.from_jid, r.body, r.is_optout, r.created_at, l.name FROM replies r
-       LEFT JOIN leads l ON l.id = r.lead_id ORDER BY r.id DESC LIMIT 500`,
+      `SELECT l.* FROM leads l LEFT JOIN scores s ON s.lead_id = l.id
+       WHERE l.phone IS NOT NULL AND l.suggested_message IS NULL AND COALESCE(s.score,0) >= ?
+       ORDER BY COALESCE(s.score,0) DESC LIMIT 50`,
     )
-    .all() as unknown as Array<{ id: number; from_jid: string; body: string; is_optout: number; created_at: string; name: string | null }>;
-  res.send(repliesPage(rows));
+    .all(config.minScore) as unknown as Array<Parameters<typeof draftMessage>[0]>;
+  for (const lead of leads) {
+    const s = getScore(lead.id);
+    const body = await draftMessage(lead, s?.template_id);
+    setSuggestedMessage(lead.id, body);
+  }
+  console.log(`[web] susun pesan: ${leads.length}`);
+  res.redirect('/');
+});
+
+app.post('/contacted', (req, res) => {
+  if (req.body.id) markContacted(Number(req.body.id));
+  res.redirect(req.get('referer') ?? '/');
 });
 
 app.get('/export.csv', (_req, res) => {

@@ -1,12 +1,24 @@
 import { writeFileSync } from 'node:fs';
 import { config, hasAI, hasMaps } from './config.ts';
-import { db, upsertLead, listLeads, saveScore, hasMessage, isSuppressed, getScore, approveMessage, approveAllDrafts, sentToday } from './db/index.ts';
+import {
+  db,
+  upsertLead,
+  listLeads,
+  saveScore,
+  getScore,
+  setSuggestedMessage,
+  markContacted,
+  addSuppression,
+  createCampaign,
+  setCampaignLeadCount,
+} from './db/index.ts';
+import type { LeadRecord } from './types.ts';
 import { expandQuery } from './ai/expand.ts';
 import { scoreLeads } from './ai/score.ts';
 import { discover } from './discovery/index.ts';
 import { enrichContact } from './enrich/index.ts';
 import { draftMessage } from './outreach/draft.ts';
-import { createMessage } from './db/index.ts';
+import { chatLink } from './outreach/chat-link.ts';
 import { leadsToCsv } from './export/csv.ts';
 
 async function cmdExpand(intent: string): Promise<void> {
@@ -21,15 +33,12 @@ async function cmdDiscover(intent: string): Promise<void> {
     console.log('! Intent terlalu luas. Tambahkan tipe target + kota, contoh: "SSB Bandung".');
     return;
   }
-  const campaign = db
-    .prepare('INSERT INTO campaigns (name, keyword, query_json) VALUES (?,?,?)')
-    .run(intent.slice(0, 60), intent, JSON.stringify(q));
-  const campaignId = Number(campaign.lastInsertRowid);
+  const campaignId = createCampaign(intent.slice(0, 60), intent, q);
 
   const candidates = await discover(q);
   console.log(`[discover] kandidat: ${candidates.length}`);
 
-  let saved = 0;
+  const seen = new Set<number>();
   for (const c of candidates) {
     const contact = await enrichContact(c);
     const id = upsertLead({
@@ -38,15 +47,16 @@ async function cmdDiscover(intent: string): Promise<void> {
       email: c.email ?? contact.emails[0],
     });
     if (contact.phones.length > 1 || contact.emails.length > 1) {
-      db.prepare('UPDATE leads SET meta = json_set(COALESCE(meta,\'{}\'), \'$.extraContacts\', ?) WHERE id = ?').run(
+      db.prepare("UPDATE leads SET meta = json_set(COALESCE(meta,'{}'), '$.extraContacts', ?) WHERE id = ?").run(
         JSON.stringify({ phones: contact.phones, emails: contact.emails }),
         id,
       );
     }
-    saved++;
+    seen.add(id);
   }
-  console.log(`[discover] tersimpan: ${saved} (campaign #${campaignId})`);
-  console.log(`[discover] lead punya nomor: ${listLeads({ withPhone: true }).length}`);
+  setCampaignLeadCount(campaignId, seen.size);
+  console.log(`[discover] tersimpan: ${seen.size} (campaign #${campaignId})`);
+  console.log(`[discover] total lead punya nomor: ${listLeads({ withPhone: true }).length}`);
 }
 
 async function cmdScore(): Promise<void> {
@@ -58,62 +68,86 @@ async function cmdScore(): Promise<void> {
   console.log(`[score] selesai (model: ${model})`);
 }
 
-async function cmdDraft(): Promise<void> {
-  const leads = listLeads({ withPhone: true, minScore: config.minScore });
-  let made = 0;
-  for (const lead of leads) {
-    if (isSuppressed(lead.phone)) continue;
-    if (hasMessage(lead.id)) continue;
-    const s = getScore(lead.id);
-    const body = await draftMessage(lead, s?.template_id);
-    createMessage(lead.id, body);
-    made++;
-  }
-  console.log(`[draft] pesan draft dibuat: ${made}`);
+function leadsNeedingDraft(): LeadRecord[] {
+  return db
+    .prepare(
+      `SELECT l.* FROM leads l LEFT JOIN scores s ON s.lead_id = l.id
+       WHERE l.phone IS NOT NULL AND l.suggested_message IS NULL AND COALESCE(s.score,0) >= ?
+       ORDER BY COALESCE(s.score,0) DESC`,
+    )
+    .all(config.minScore) as unknown as LeadRecord[];
 }
 
-function cmdExport(path = 'leads.csv'): void {
-  writeFileSync(path, leadsToCsv(config.minScore), 'utf8');
-  console.log(`[export] ${path}`);
+async function cmdDraft(): Promise<void> {
+  const leads = leadsNeedingDraft();
+  if (!leads.length) return console.log('tidak ada lead yang perlu pesan');
+  let made = 0;
+  for (const lead of leads) {
+    const s = getScore(lead.id);
+    const body = await draftMessage(lead, s?.template_id);
+    setSuggestedMessage(lead.id, body);
+    made++;
+  }
+  console.log(`[draft] pesan disusun: ${made}`);
+}
+
+function cmdContacts(): void {
+  const leads = listLeads({ withPhone: true, minScore: config.minScore, uncontacted: true });
+  if (!leads.length) return console.log('belum ada lead siap hubungi. jalankan: discover -> score -> draft');
+  for (const l of leads) {
+    const s = getScore(l.id);
+    console.log(`\n#${l.id}  [${s?.score ?? '-'}]  ${l.name}  ${l.phone}`);
+    if (l.suggested_message) console.log(`  pesan: ${l.suggested_message.slice(0, 100)}${l.suggested_message.length > 100 ? '...' : ''}`);
+    console.log(`  chat : ${chatLink(l.phone as string, l.suggested_message)}`);
+  }
+  console.log(`\n${leads.length} lead belum dihubungi. Tandai setelah kirim: npm run cli -- mark <id>`);
+}
+
+function cmdMark(ids: string[]): void {
+  let n = 0;
+  for (const id of ids) {
+    markContacted(Number(id));
+    n++;
+  }
+  console.log(`[mark] ${n} lead ditandai sudah dihubungi`);
+}
+
+function cmdSuppress(args: string[]): void {
+  const phone = args[0];
+  if (!phone) return console.log('pakai: suppress <nomor> [alasan]');
+  addSuppression(phone, args.slice(1).join(' ') || 'manual');
+  console.log(`[suppress] ${phone} masuk DNC list`);
+}
+
+function cmdExport(path = 'leads.csv', onlyNew = false): void {
+  writeFileSync(path, leadsToCsv(config.minScore, { uncontactedOnly: onlyNew }), 'utf8');
+  console.log(`[export] ${path}${onlyNew ? ' (hanya belum dihubungi)' : ''}`);
 }
 
 function cmdStats(): void {
   const total = db.prepare('SELECT COUNT(*) AS n FROM leads').get() as { n: number };
   const withPhone = db.prepare('SELECT COUNT(*) AS n FROM leads WHERE phone IS NOT NULL').get() as { n: number };
   const scored = db.prepare('SELECT COUNT(*) AS n FROM scores').get() as { n: number };
-  const drafts = db.prepare("SELECT COUNT(*) AS n FROM messages WHERE status='draft'").get() as { n: number };
-  const approved = db.prepare("SELECT COUNT(*) AS n FROM messages WHERE status='approved'").get() as { n: number };
-  const replies = db.prepare('SELECT COUNT(*) AS n FROM replies').get() as { n: number };
-  console.log(`leads=${total.n} withPhone=${withPhone.n} scored=${scored.n} drafts=${drafts.n} approved=${approved.n}`);
-  console.log(`terkirim hari ini=${sentToday()}/${config.dailySendCap} balasan=${replies.n}`);
+  const contacted = db.prepare('SELECT COUNT(*) AS n FROM leads WHERE contacted_at IS NOT NULL').get() as { n: number };
+  const dnc = db.prepare('SELECT COUNT(*) AS n FROM suppression').get() as { n: number };
+  const campaigns = db.prepare('SELECT COUNT(*) AS n FROM campaigns').get() as { n: number };
+  console.log(`leads=${total.n} withPhone=${withPhone.n} scored=${scored.n} contacted=${contacted.n}`);
+  console.log(`campaigns=${campaigns.n} dnc=${dnc.n}`);
   console.log(`AI=${hasAI ? 'on' : 'off'} maps=${hasMaps ? 'on' : 'off'} minScore=${config.minScore}`);
 }
 
-function cmdApprove(arg?: string): void {
-  if (arg === 'all') {
-    const n = approveAllDrafts(config.minScore);
-    console.log(`[approve] ${n} draft disetujui`);
-    return;
-  }
-  if (arg) {
-    approveMessage(Number(arg));
-    console.log(`[approve] pesan #${arg} disetujui`);
-    return;
-  }
-  console.log('pakai: approve <id> | approve all');
-}
-
 function usage(): void {
-  console.log(`ig-selling (Fase 1: harvester, tanpa WA)
+  console.log(`ig-selling — scraper lead tim olahraga (tanpa WhatsApp otomatis)
 
   npm run cli -- expand   "<intent>"     lihat query hasil AI
   npm run cli -- discover "<intent>"     cari + enrich + simpan lead
   npm run cli -- score                   skor lead pakai AI
-  npm run cli -- draft                   buat draft pesan untuk lead bagus
-  npm run cli -- approve <id>|all        setujui draft untuk dikirim
-  npm run cli -- export [file.csv]       export lead (default leads.csv)
+  npm run cli -- draft                   susun pesan siap kirim
+  npm run cli -- contacts                tampilkan lead siap dihubungi + link wa.me
+  npm run cli -- mark <id...>            tandai sudah dihubungi
+  npm run cli -- suppress <nomor> [note] masukkan ke DNC list
+  npm run cli -- export [file] [--new]   export CSV (--new = belum dihubungi)
   npm run cli -- stats                   ringkasan database
-  npm run cli -- wa                      (atau npm run wa) konek WhatsApp, scan QR, kirim
 `);
 }
 
@@ -132,12 +166,20 @@ async function main(): Promise<void> {
     case 'draft':
       await cmdDraft();
       break;
-    case 'approve':
-      cmdApprove(rest[0]);
+    case 'contacts':
+      cmdContacts();
       break;
-    case 'export':
-      cmdExport(rest[0]);
+    case 'mark':
+      cmdMark(rest);
       break;
+    case 'suppress':
+      cmdSuppress(rest);
+      break;
+    case 'export': {
+      const onlyNew = rest.includes('--new');
+      cmdExport(rest.find((r) => !r.startsWith('--')) ?? 'leads.csv', onlyNew);
+      break;
+    }
     case 'stats':
       cmdStats();
       break;

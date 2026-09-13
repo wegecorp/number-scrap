@@ -3,6 +3,8 @@ import { normalizePhone, extractPhones, extractEmails, extractWhatsAppNumbers } 
 import { decodeInstagramWrapper, isAggregator, extractChildLinks } from './enrich/link-resolve.ts';
 import { heuristicExpand } from './ai/expand.ts';
 import { fillTemplate, templateFor } from './outreach/templates.ts';
+import { chatLink } from './outreach/chat-link.ts';
+import { mentionsFromBio } from './discovery/adapters/instagram.ts';
 
 let pass = 0;
 function test(name: string, fn: () => void): void {
@@ -60,6 +62,17 @@ test('fillTemplate', () => {
 });
 test('templateFor fallback', () => {
   assert.equal(templateFor('tidak-ada').id, 't_umum');
+});
+test('chatLink encode pesan + normalisasi nomor', () => {
+  const link = chatLink('+62 812-3456-7890', 'Halo SSB A');
+  assert.equal(link, 'https://wa.me/6281234567890?text=Halo%20SSB%20A');
+});
+test('chatLink tanpa pesan', () => {
+  assert.equal(chatLink('081234567890', ''), 'https://wa.me/081234567890');
+});
+test('mentionsFromBio ambil tag, buang reserved', () => {
+  const out = mentionsFromBio('Tim peserta @ssbgaruda @garuda_muda follow @p @reels');
+  assert.deepEqual(out, ['ssbgaruda', 'garuda_muda']);
 });
 
 console.log(`\n${pass} check lulus${process.exitCode ? ' (ada gagal)' : ''}`);

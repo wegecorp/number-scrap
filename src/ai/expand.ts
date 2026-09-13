@@ -39,6 +39,33 @@ export function heuristicExpand(intent: string): ExpandedQuery {
   };
 }
 
+export async function extraQueriesFromSeeds(
+  q: ExpandedQuery,
+  seeds: Array<{ name: string; bio?: string | null }>,
+): Promise<string[]> {
+  if (!hasAI || !seeds.length) return [];
+  const system = [
+    'Kamu memperluas pencarian lead tim olahraga Indonesia di Instagram.',
+    'Dari contoh hasil yang ditemukan, usulkan query Google BARU (belum ada di daftar) untuk menemukan lebih banyak akun sejenis.',
+    'Setiap query WAJIB mengandung "site:instagram.com".',
+    'Balas HANYA JSON: {"queries":string[]} maksimal 6.',
+  ].join(' ');
+  const user = JSON.stringify({
+    intent: { sport: q.sport, targetType: q.targetType, city: q.city, existing: q.googleQueries },
+    contoh: seeds.slice(0, 30).map((s) => ({ name: s.name, bio: (s.bio ?? '').slice(0, 120) })),
+  });
+  try {
+    const out = await chatJSON<{ queries?: string[] }>(system, user);
+    return (out.queries ?? [])
+      .filter((x): x is string => typeof x === 'string' && /site:instagram\.com/i.test(x))
+      .filter((x) => !q.googleQueries.includes(x))
+      .slice(0, 6);
+  } catch (err) {
+    console.warn(`[ai] seed expansion gagal: ${(err as Error).message}`);
+    return [];
+  }
+}
+
 export async function expandQuery(intent: string): Promise<ExpandedQuery> {
   if (!hasAI) return heuristicExpand(intent);
   const system = [

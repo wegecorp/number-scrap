@@ -17,6 +17,16 @@ export function handlesFromUrls(urls: string[]): string[] {
   return [...out];
 }
 
+export function mentionsFromBio(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/@([A-Za-z0-9_.]{3,30})/g)) {
+    const h = m[1].toLowerCase();
+    if (RESERVED.has(h) || h.includes('instagram')) continue;
+    out.add(h);
+  }
+  return [...out];
+}
+
 export async function findHandles(queries: string[], perQuery = 25): Promise<string[]> {
   const found = new Set<string>();
   for (const q of queries) {

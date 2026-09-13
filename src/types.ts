@@ -1,4 +1,4 @@
-export type Source = 'instagram' | 'google-maps';
+export type Source = 'instagram' | 'google-maps' | 'website' | 'forum';
 
 export type Candidate = {
   source: Source;
@@ -45,6 +45,8 @@ export type LeadRecord = {
   email: string | null;
   url: string | null;
   meta: string | null;
+  suggested_message: string | null;
+  contacted_at: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS leads (
   email TEXT,
   url TEXT,
   meta TEXT,
+  suggested_message TEXT,
+  contacted_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -35,6 +37,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   name TEXT,
   keyword TEXT,
   query_json TEXT,
+  lead_count INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'open',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -49,39 +52,22 @@ CREATE TABLE IF NOT EXISTS scores (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS messages (
-  id INTEGER PRIMARY KEY,
-  lead_id INTEGER NOT NULL REFERENCES leads(id),
-  campaign_id INTEGER,
-  body TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'draft',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  approved_at TEXT,
-  sent_at TEXT
-);
-
 CREATE TABLE IF NOT EXISTS suppression (
   phone TEXT PRIMARY KEY,
   reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-
-CREATE TABLE IF NOT EXISTS replies (
-  id INTEGER PRIMARY KEY,
-  lead_id INTEGER,
-  from_jid TEXT,
-  body TEXT,
-  is_optout INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
 `);
 
+// Migrasi dari versi lama (Fase 1/2) + bersihkan sisa tabel WhatsApp.
 function addColumnIfMissing(table: string, col: string, decl: string): void {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as unknown as Array<{ name: string }>;
   if (!cols.some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${decl}`);
 }
-addColumnIfMissing('messages', 'error', 'TEXT');
-
+addColumnIfMissing('leads', 'suggested_message', 'TEXT');
+addColumnIfMissing('leads', 'contacted_at', 'TEXT');
+addColumnIfMissing('campaigns', 'lead_count', 'INTEGER NOT NULL DEFAULT 0');
+db.exec('DROP TABLE IF EXISTS messages; DROP TABLE IF EXISTS replies;');
 
 export function upsertLead(c: Candidate): number {
   const existing = c.phone
@@ -112,10 +98,13 @@ export function upsertLead(c: Candidate): number {
   return Number(info.lastInsertRowid);
 }
 
-export function listLeads(opts: { withPhone?: boolean; unscored?: boolean; minScore?: number } = {}): LeadRecord[] {
+export function listLeads(
+  opts: { withPhone?: boolean; unscored?: boolean; minScore?: number; uncontacted?: boolean } = {},
+): LeadRecord[] {
   const where: string[] = [];
   if (opts.withPhone) where.push('l.phone IS NOT NULL');
   if (opts.unscored) where.push('s.lead_id IS NULL');
+  if (opts.uncontacted) where.push('l.contacted_at IS NULL');
   if (opts.minScore != null) where.push(`COALESCE(s.score, 0) >= ${Number(opts.minScore)}`);
   const sql = `SELECT l.* FROM leads l LEFT JOIN scores s ON s.lead_id = l.id
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY COALESCE(s.score,0) DESC, l.id DESC`;
@@ -140,109 +129,30 @@ export function getScore(leadId: number): { score: number; reason: string | null
     | undefined;
 }
 
+export function setSuggestedMessage(leadId: number, message: string): void {
+  db.prepare('UPDATE leads SET suggested_message=?, updated_at=datetime(\'now\') WHERE id=?').run(message, leadId);
+}
+
+export function markContacted(leadId: number): void {
+  db.prepare("UPDATE leads SET contacted_at=datetime('now') WHERE id=? AND contacted_at IS NULL").run(leadId);
+}
+
 export function isSuppressed(phone: string | null): boolean {
   if (!phone) return false;
   return !!db.prepare('SELECT 1 FROM suppression WHERE phone = ?').get(phone);
-}
-
-export function createMessage(leadId: number, body: string, campaignId: number | null = null): number {
-  const info = db
-    .prepare('INSERT INTO messages (lead_id, campaign_id, body) VALUES (?,?,?)')
-    .run(leadId, campaignId, body);
-  return Number(info.lastInsertRowid);
-}
-
-export function hasMessage(leadId: number): boolean {
-  return !!db.prepare("SELECT 1 FROM messages WHERE lead_id = ? AND status IN ('draft','approved','sent')").get(leadId);
-}
-
-export type PendingMessage = {
-  id: number;
-  lead_id: number;
-  body: string;
-  name: string | null;
-  phone: string | null;
-};
-
-export function approvedMessages(limit = 10): PendingMessage[] {
-  return db
-    .prepare(
-      `SELECT m.id, m.lead_id, m.body, l.name, l.phone FROM messages m
-       JOIN leads l ON l.id = m.lead_id
-       WHERE m.status = 'approved' AND l.phone IS NOT NULL
-       ORDER BY m.id ASC LIMIT ?`,
-    )
-    .all(limit) as unknown as PendingMessage[];
-}
-
-export function markSent(id: number): void {
-  db.prepare("UPDATE messages SET status='sent', sent_at=datetime('now') WHERE id=?").run(id);
-}
-
-export function markFailed(id: number, error: string): void {
-  db.prepare("UPDATE messages SET status='failed', error=? WHERE id=?").run(error.slice(0, 200), id);
-}
-
-export function approveMessage(id: number): void {
-  db.prepare("UPDATE messages SET status='approved', approved_at=datetime('now') WHERE id=? AND status='draft'").run(id);
-}
-
-export function approveAllDrafts(minScore = 0): number {
-  const info = db
-    .prepare(
-      `UPDATE messages SET status='approved', approved_at=datetime('now')
-       WHERE status='draft' AND lead_id IN (SELECT lead_id FROM scores WHERE score >= ?)`,
-    )
-    .run(minScore);
-  return Number(info.changes);
-}
-
-export function sentToday(): number {
-  const row = db
-    .prepare("SELECT COUNT(*) AS n FROM messages WHERE status='sent' AND date(sent_at)=date('now')")
-    .get() as { n: number };
-  return row.n;
-}
-
-export function findLeadByPhone(phone: string): { id: number; name: string | null } | undefined {
-  return db.prepare('SELECT id, name FROM leads WHERE phone = ?').get(phone) as { id: number; name: string | null } | undefined;
-}
-
-export function recordReply(leadId: number | null, jid: string, body: string, isOptout: boolean): void {
-  db.prepare('INSERT INTO replies (lead_id, from_jid, body, is_optout) VALUES (?,?,?,?)').run(
-    leadId,
-    jid,
-    body.slice(0, 2000),
-    isOptout ? 1 : 0,
-  );
 }
 
 export function addSuppression(phone: string, reason: string): void {
   db.prepare('INSERT INTO suppression (phone, reason) VALUES (?,?) ON CONFLICT(phone) DO NOTHING').run(phone, reason);
 }
 
-export function listMessages(limit = 500): Array<{
-  id: number;
-  lead_id: number;
-  body: string;
-  status: string;
-  error: string | null;
-  name: string | null;
-  phone: string | null;
-}> {
-  return db
-    .prepare(
-      `SELECT m.id, m.lead_id, m.body, m.status, m.error, l.name, l.phone FROM messages m
-       JOIN leads l ON l.id = m.lead_id ORDER BY m.id DESC LIMIT ?`,
-    )
-    .all(limit) as unknown as Array<{
-    id: number;
-    lead_id: number;
-    body: string;
-    status: string;
-    error: string | null;
-    name: string | null;
-    phone: string | null;
-  }>;
+export function createCampaign(name: string, keyword: string, query: unknown): number {
+  const info = db
+    .prepare('INSERT INTO campaigns (name, keyword, query_json) VALUES (?,?,?)')
+    .run(name, keyword, JSON.stringify(query));
+  return Number(info.lastInsertRowid);
 }
 
+export function setCampaignLeadCount(id: number, count: number): void {
+  db.prepare('UPDATE campaigns SET lead_count=? WHERE id=?').run(count, id);
+}

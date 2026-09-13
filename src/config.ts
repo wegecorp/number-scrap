@@ -16,7 +16,7 @@ export const config = {
   defaultCountry: env('DEFAULT_COUNTRY', 'ID'),
   region: env('REGION', 'ID'),
   language: env('LANGUAGE', 'id'),
-  dailySendCap: Number(env('DAILY_SEND_CAP', '15')),
+  seedExpansion: Number(env('AI_SEED_EXPANSION', '1')),
   minScore: Number(env('MIN_SCORE', '60')),
   offer: env('OFFER', 'perlengkapan tim olahraga'),
   searchProvider: env('SEARCH_PROVIDER', 'duckduckgo'),
@@ -24,12 +24,6 @@ export const config = {
   googleCseCx: env('GOOGLE_CSE_CX'),
   googleMapsKey: env('GOOGLE_MAPS_API_KEY'),
   igSessionId: env('IG_SESSIONID'),
-  wa: {
-    authDir: env('WA_AUTH_DIR', 'data/wa-auth'),
-    minDelayMs: Number(env('WA_MIN_DELAY_MS', '60000')),
-    maxDelayMs: Number(env('WA_MAX_DELAY_MS', '120000')),
-    pollMs: Number(env('WA_POLL_MS', '30000')),
-  },
   ai: {
     key: env('AI_API_KEY'),
     baseUrl: env('AI_BASE_URL', 'https://api.deepseek.com/v1').replace(/\/+$/, ''),
