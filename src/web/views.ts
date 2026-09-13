@@ -116,6 +116,17 @@ function layout(title: string, body: string): string {
  .pg:hover{background:var(--pink-soft)}
  .pg.off{opacity:.4}
  .pager a b,.pager b{color:var(--pink)}
+ td:first-child,th:first-child{width:40px}
+ input[type=checkbox]{width:18px;height:18px;accent-color:var(--pink);cursor:pointer;vertical-align:-3px}
+ tbody tr:has(input[name="ids"]:checked){background:var(--pink-soft)}
+ .chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+ .chip{display:inline-flex;align-items:center;gap:6px;background:var(--pink-soft);border:1px solid var(--pink);color:var(--ink);border-radius:9999px;padding:5px 12px;font-size:13px;text-decoration:none}
+ .chip .x{color:var(--pink);font-weight:700}
+ .chip:hover{filter:brightness(.97)}
+ .selbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:10px 14px;margin-bottom:12px}
+ .selcount{font-weight:600;color:var(--ink);margin-right:auto}
+ button[disabled]{opacity:.4;cursor:not-allowed;filter:none}
+ .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
  @media(max-width:640px){
   main{padding:16px}
   header{min-height:auto;padding:10px 14px;gap:4px}
@@ -171,10 +182,25 @@ export function leadsPage(rows: Row[], opts: PageOpts): string {
   const sourceOptions = opts.sources.map((s) => `<option value="${esc(s)}" ${f.source === s ? 'selected' : ''}>${esc(s)}</option>`).join('');
   const exportHref = `/export.csv${qs(f) ? '?' + qs(f) : ''}`;
   const activeCount = [f.q, f.source, f.campaign, f.minScore ? 'x' : '', f.onlyNew ? 'x' : ''].filter(Boolean).length;
+  const relFilter = (patch: Partial<Filters>): string => {
+    const p = new URLSearchParams(qs({ ...f, ...patch }));
+    return p.toString() ? `/?${p.toString()}` : '/';
+  };
+  const chip = (label: string, href: string): string => `<a class="chip" href="${esc(href)}">${esc(label)} <span class="x">×</span></a>`;
+  const chips: string[] = [];
+  if (f.q) chips.push(chip(`cari: ${f.q}`, relFilter({ q: '' })));
+  if (f.source) chips.push(chip(`sumber: ${f.source}`, relFilter({ source: '' })));
+  if (f.campaign) {
+    const c = opts.campaigns.find((x) => String(x.id) === f.campaign);
+    chips.push(chip(`campaign: ${c ? c.keyword : f.campaign}`, relFilter({ campaign: '' })));
+  }
+  if (f.minScore) chips.push(chip(`skor ≥ ${f.minScore}`, relFilter({ minScore: 0 })));
+  if (f.onlyNew) chips.push(chip('belum dihubungi', relFilter({ onlyNew: false })));
 
   const body = `
 ${opts.flash ? `<div class="flash">${esc(opts.flash)}</div>` : ''}
 ${opts.running ? `<p><span class="spin"></span> Job #${opts.running.id} berjalan — <a href="/pipeline">lihat progres</a></p>` : ''}
+${chips.length ? `<div class="chips">${chips.join('')}<a class="chip" href="/">reset semua <span class="x">×</span></a></div>` : ''}
 <details class="panel">
  <summary>Filter &amp; Pencarian${activeCount ? ` <span class="badge">${activeCount}</span>` : ''}</summary>
  <form method="get" action="/" class="bar">
@@ -202,19 +228,20 @@ ${opts.running ? `<p><span class="spin"></span> Job #${opts.running.id} berjalan
  </form>
 </details>
 <form method="post" action="/bulk">
-<p>
- <button type="submit" name="action" value="contacted">Tandai terpilih</button>
- <button type="submit" name="action" value="delete" class="danger" onclick="return confirm('Hapus permanen yang terpilih?')">Hapus terpilih</button>
- <button type="submit" name="action" value="block" class="ghost" onclick="return confirm('Blokir & hapus yang terpilih?')">Blokir terpilih</button>
-</p>
+<div class="selbar">
+ <span class="selcount" id="selcount">0 dipilih</span>
+ <button type="submit" name="action" value="contacted" data-needsel>Tandai terpilih</button>
+ <button type="submit" name="action" value="delete" class="danger" data-needsel onclick="return confirm('Hapus permanen yang terpilih?')">Hapus terpilih</button>
+ <button type="submit" name="action" value="block" class="ghost" data-needsel onclick="return confirm('Blokir & hapus yang terpilih?')">Blokir terpilih</button>
+</div>
 ${pager(f, opts.page ?? 1, opts.perPage ?? 25, opts.total ?? rows.length)}
 <table>
-<thead><tr><th></th><th>Skor</th><th>Nama</th><th>Nomor</th><th>Sumber</th><th>Kota</th><th>Campaign</th><th>Pesan</th><th>Aksi</th></tr></thead>
+<thead><tr><th><input type="checkbox" id="selall" aria-label="pilih semua di halaman ini"/></th><th>Skor</th><th>Nama</th><th>Nomor</th><th>Sumber</th><th>Kota</th><th>Campaign</th><th>Pesan</th><th>Aksi</th></tr></thead>
 <tbody>
 ${rows
   .map(
     (r) => `<tr>
- <td data-label=""><input type="checkbox" name="ids" value="${r.id}"/></td>
+ <td data-label=""><input type="checkbox" name="ids" value="${r.id}" aria-label="pilih ${esc(r.name)}"/></td>
  <td data-label="Skor" class="score ${scoreClass(r.score)}">${r.score ?? '-'}</td>
  <td data-label="Nama">${esc(r.name)}${r.handle ? ` <span class="muted">@${esc(r.handle)}</span>` : ''}</td>
  <td data-label="Nomor">${r.phone ? esc(r.phone) : '<span class="muted">-</span>'}</td>
@@ -233,6 +260,24 @@ ${rows
   .join('')}
 </tbody></table>
 </form>
+<script>
+(function(){
+ var form=document.querySelector('form[action="/bulk"]');if(!form)return;
+ var all=form.querySelectorAll('input[name="ids"]');
+ var master=document.getElementById('selall');
+ var count=document.getElementById('selcount');
+ var btns=form.querySelectorAll('[data-needsel]');
+ function sync(){
+  var n=0;for(var i=0;i<all.length;i++){if(all[i].checked)n++;}
+  if(count)count.textContent=n+' dipilih';
+  for(var j=0;j<btns.length;j++){btns[j].disabled=n===0;}
+  if(master){master.checked=n>0&&n===all.length;master.indeterminate=n>0&&n<all.length;}
+ }
+ if(master)master.addEventListener('change',function(){for(var i=0;i<all.length;i++){all[i].checked=master.checked;}sync();});
+ for(var k=0;k<all.length;k++){all[k].addEventListener('change',sync);}
+ sync();
+})();
+</script>
 ${pager(f, opts.page ?? 1, opts.perPage ?? 25, opts.total ?? rows.length)}`;
   return layout('Leads', body);
 }
