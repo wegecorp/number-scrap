@@ -4,7 +4,6 @@ import {
   upsertLead,
   listLeads,
   saveScore,
-  getScore,
   setSuggestedMessage,
   createCampaign,
   setCampaignLeadCount,
@@ -104,9 +103,7 @@ export async function runDraft(log: Logger = consoleLogger): Promise<void> {
   }
   let made = 0;
   for (const lead of leads) {
-    const s = getScore(lead.id);
-    const body = await draftMessage(lead, s?.template_id);
-    setSuggestedMessage(lead.id, body);
+    setSuggestedMessage(lead.id, draftMessage(lead));
     made++;
   }
   log(`[draft] pesan disusun: ${made}`);

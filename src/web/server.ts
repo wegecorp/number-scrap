@@ -5,7 +5,6 @@ import { config } from '../config.ts';
 import {
   db,
   getLead,
-  getScore,
   setSuggestedMessage,
   markContacted,
   deleteLead,
@@ -213,7 +212,7 @@ app.post('/clean/apply', (req, res) => {
   res.redirect(`/?flash=${encodeURIComponent(`Bersihkan: ${deleted} lead dihapus`)}`);
 });
 
-app.post('/draft', async (_req, res) => {
+app.post('/draft', (_req, res) => {
   const leads = db
     .prepare(
       `SELECT l.* FROM leads l LEFT JOIN scores s ON s.lead_id = l.id
@@ -222,9 +221,7 @@ app.post('/draft', async (_req, res) => {
     )
     .all(config.minScore) as unknown as Array<Parameters<typeof draftMessage>[0]>;
   for (const lead of leads) {
-    const s = getScore(lead.id);
-    const body = await draftMessage(lead, s?.template_id);
-    setSuggestedMessage(lead.id, body);
+    setSuggestedMessage(lead.id, draftMessage(lead));
   }
   console.log(`[web] susun pesan: ${leads.length}`);
   res.redirect('/');
