@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { config, hasAI, hasMaps } from './config.ts';
 import {
   db,
@@ -206,6 +207,46 @@ async function cmdIgCheck(handle: string): Promise<void> {
   }
 }
 
+function runPython(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(config.pythonBin, args, { cwd: process.cwd() });
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (d: Buffer) => (out += d.toString()));
+    child.stderr.on('data', (d: Buffer) => (err += d.toString()));
+    child.on('error', reject);
+    child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error((err || `exit ${code}`).split('\n')[0]))));
+  });
+}
+
+async function cmdDoctor(): Promise<void> {
+  const major = Number(process.versions.node.split('.')[0]);
+  console.log(`[doctor] node          : v${process.versions.node} ${major >= 22 ? 'OK' : 'GAGAL (butuh Node 22.5+/24)'}`);
+  console.log(`[doctor] .env          : ${existsSync('.env') ? 'ada' : 'TIDAK ADA'}`);
+  console.log(`[doctor] AI            : ${hasAI ? `on (${config.ai.model} @ ${config.ai.baseUrl})` : 'off (AI_API_KEY kosong)'}`);
+  console.log(
+    `[doctor] IG session    : ${
+      config.igSessionId ? `ada (${config.igSessionId.length} char)` : existsSync('ig/session.json') ? 'pakai ig/session.json' : 'KOSONG'
+    }`,
+  );
+  console.log(`[doctor] search        : ${config.searchProvider} [${config.searxngUrls.join(', ') || '-'}]`);
+  console.log(`[doctor] maps / osm    : ${hasMaps ? 'on' : 'off'} / ${config.osmEnabled ? 'on' : 'off'}`);
+  console.log(`[doctor] bind          : ${config.host}:${config.port}`);
+  console.log(`[doctor] dashboard auth: ${config.dashUser && config.dashPass ? 'on' : 'OFF (wajib saat online)'}`);
+  console.log(`[doctor] DB            : ${existsSync(config.dbPath) ? config.dbPath : `${config.dbPath} (akan dibuat)`}`);
+
+  const pyExists = existsSync(config.pythonBin);
+  console.log(`[doctor] PYTHON_BIN    : ${config.pythonBin} ${pyExists ? 'ada' : 'TIDAK ADA'}`);
+  if (pyExists) {
+    try {
+      const out = await runPython(['-c', 'import instagrapi; print("ok")']);
+      console.log(`[doctor] instagrapi    : ${out.trim()}`);
+    } catch (err) {
+      console.log(`[doctor] instagrapi    : GAGAL -> ${(err as Error).message}`);
+    }
+  }
+}
+
 function cmdStats(): void {
   const total = db.prepare('SELECT COUNT(*) AS n FROM leads').get() as { n: number };
   const withPhone = db.prepare('SELECT COUNT(*) AS n FROM leads WHERE phone IS NOT NULL').get() as { n: number };
@@ -234,6 +275,7 @@ function usage(): void {
   npm run cli -- suppress <nomor> [note]  masukkan ke DNC list
   npm run cli -- export [file] [--new]    export CSV (--new = belum dihubungi)
   npm run cli -- stats                    ringkasan database
+  npm run cli -- doctor                   cek lingkungan (node, AI, IG, python, auth)
 `);
 }
 
@@ -280,6 +322,9 @@ async function main(): Promise<void> {
       break;
     case 'stats':
       cmdStats();
+      break;
+    case 'doctor':
+      await cmdDoctor();
       break;
     default:
       usage();

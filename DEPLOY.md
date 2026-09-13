@@ -258,6 +258,7 @@ journalctl -u number-scrap-daily -n 100 --no-pager
 ```bash
 node -v                                  # v24
 systemctl is-active number-scrap-web     # active
+npm run cli -- doctor                     # cek menyeluruh (node, AI, IG, python, auth)
 
 # ambil PORT + kredensial dari .env (jangan tulis password literal)
 PORT=$(grep -m1 '^PORT=' .env | cut -d= -f2-)
