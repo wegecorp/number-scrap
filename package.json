@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "express": "^4.21.2",
-    "libphonenumber-js": "^1.11.17"
+    "libphonenumber-js": "^1.11.17",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.5",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
 }

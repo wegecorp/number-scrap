@@ -1,4 +1,5 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import { config } from '../config.ts';
 import { db, getScore, setSuggestedMessage, markContacted } from '../db/index.ts';
 import { draftMessage } from '../outreach/draft.ts';
@@ -7,6 +8,28 @@ import { leadsPage } from './views.ts';
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
+
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+}
+
+if (config.dashUser && config.dashPass) {
+  app.use((req, res, next) => {
+    const header = req.headers.authorization ?? '';
+    const [scheme, encoded] = header.split(' ');
+    if (scheme === 'Basic' && encoded) {
+      const [user, pass] = Buffer.from(encoded, 'base64').toString('utf8').split(':');
+      if (user !== undefined && pass !== undefined && safeEqual(user, config.dashUser) && safeEqual(pass, config.dashPass)) {
+        return next();
+      }
+    }
+    res.set('WWW-Authenticate', 'Basic realm="number-scrap"');
+    res.status(401).send('Auth required');
+  });
+  console.log('[web] basic auth aktif');
+}
 
 app.get('/', (req, res) => {
   const filter = String(req.query.filter ?? '');

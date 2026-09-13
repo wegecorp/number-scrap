@@ -16,6 +16,8 @@ export const config = {
   defaultCountry: env('DEFAULT_COUNTRY', 'ID'),
   region: env('REGION', 'ID'),
   language: env('LANGUAGE', 'id'),
+  dashUser: env('DASH_USER'),
+  dashPass: env('DASH_PASS'),
   seedExpansion: Number(env('AI_SEED_EXPANSION', '1')),
   minScore: Number(env('MIN_SCORE', '60')),
   offer: env('OFFER', 'perlengkapan tim olahraga'),

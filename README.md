@@ -57,6 +57,7 @@ Set di `.env`:
 | `GOOGLE_MAPS_API_KEY` | Places API (New) — opsional, butuh kartu kredit |
 | `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` | endpoint AI (OpenAI-compatible, mis. sumopod) |
 | `AI_JSON_MODE` | `auto` (aman) / `on` / `off` |
+| `DASH_USER`, `DASH_PASS` | basic auth dashboard — **wajib saat online** |
 | `MIN_SCORE` | ambang lead dianggap layak |
 
 ## Perintah
@@ -83,7 +84,9 @@ npm run selftest
 
 ## Stack
 
-Node 24 + TypeScript, `node:sqlite` (nol native dep), Express + HTMX, `libphonenumber-js`. Tanpa framework AI, tanpa ORM.
+Node 24 + TypeScript, `node:sqlite` (nol native dep), Express + HTMX, `libphonenumber-js`. Sidecar Python (instagrapi) untuk baca profil IG. Tanpa ORM.
+
+Deploy ke VPS: lihat [DEPLOY.md](DEPLOY.md).
 
 ## Catatan
 
