@@ -310,6 +310,7 @@ ufw allow 3100        # jangan — HTTP polos, dasar, rawan
 | `EACCES` menulis `data/app.db` | folder milik user lain. `sudo chown -R $USER /opt/number-scrap/data`. |
 | `npm: not found` di systemd | npm tak di `/usr/bin`. Cek `which npm`, sesuaikan `ExecStart`. |
 | `LoginRequired` / `TooManyRedirects` saat `ig_check` | `IG_SESSIONID` kedaluwarsa → ambil ulang cookie (lihat bagian 6). |
+| Dialog basic auth muncul terus / "ga kebuka" | kredensial salah atau cache browser. Verifikasi di server: `curl -sI -u "$U:$P" http://127.0.0.1:$PORT` harus `200`. Buka URL tunnel di **incognito**. Pastikan `DASH_USER` (jangan asumsi "admin"). Password `openssl rand` susah diketik → set ulang yang mudah diingat tapi kuat. |
 | `challenge_required` | akun perlu verifikasi di browser, atau IP VPS dicurigai → pakai proxy (bagian 12). |
 | timer jalan tapi tidak ada lead baru | cek `journalctl -u number-scrap-daily -n 50`; pastikan `keywords.txt` ada di `/opt/number-scrap`. |
 
