@@ -81,6 +81,11 @@ Harapan: keluar JSON profil. Kalau `challenge_required` → akun butuh verifikas
 
 ## 7. Dashboard sebagai service (systemd)
 
+Pastikan path npm (biasanya `/usr/bin/npm`):
+```bash
+which npm   # kalau beda, sesuaikan ExecStart di unit bawah
+```
+
 ```bash
 sudo tee /etc/systemd/system/number-scrap-web.service >/dev/null <<'EOF'
 [Unit]
@@ -94,19 +99,20 @@ ExecStart=/usr/bin/npm run --silent serve
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
-User=%i
+User=ubuntu
 
 [Install]
 WantedBy=multi-user.target
 EOF
 ```
 
-Ganti `User=%i` dengan user kamu (mis. `User=ubuntu`), lalu:
+> Pakai `User=` sesuai akunmu. Kalau login sebagai **root**, ganti jadi `User=root` (atau hapus baris `User=`). Jangan biarkan `User=%i` — itu placeholder template, unit biasa akan gagal.
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now number-scrap-web
-sudo systemctl status number-scrap-web
+sudo systemctl status number-scrap-web --no-pager
+journalctl -u number-scrap-web -n 30 --no-pager   # kalau gagal, lihat log ini
 ```
 
 ## 8. Job harian (systemd timer)
@@ -125,6 +131,7 @@ Environment=KEYWORDS=keywords.txt
 Environment=LIMIT=20
 ExecStart=/usr/bin/bash scripts/daily.sh
 User=ubuntu
+# sesuaikan User= dengan akunmu (login root -> User=root)
 EOF
 
 sudo tee /etc/systemd/system/number-scrap-daily.timer >/dev/null <<'EOF'
@@ -222,6 +229,26 @@ git pull
 npm ci
 ig/venv/bin/pip install -r ig/requirements.txt
 sudo systemctl restart number-scrap-web
+```
+
+## 15. Troubleshooting
+
+| Gejala | Sebab / solusi |
+|---|---|
+| `systemctl status` → `Failed to determine user` | baris `User=%i` belum diganti. Set `User=root` atau `User=ubuntu`. |
+| `status=217/USER` | user di `User=` tak ada. Cek `id ubuntu`. |
+| `EADDRINUSE :3000` | port dipakai. `ss -ltnp \| grep 3000`, lalu ganti `PORT` di `.env` atau hentikan proses itu. |
+| dashboard 502 dari Caddy | app tidak jalan / bind beda. Pastikan `HOST=127.0.0.1`, cek `journalctl -u number-scrap-web -n 50`. |
+| `EACCES` menulis `data/app.db` | folder milik user lain. `sudo chown -R $USER /opt/number-scrap/data`. |
+| `npm: not found` di systemd | npm tak di `/usr/bin`. Cek `which npm`, sesuaikan `ExecStart`. |
+| `LoginRequired` / `TooManyRedirects` saat `ig_check` | `IG_SESSIONID` kedaluwarsa → ambil ulang cookie (lihat bagian 6). |
+| `challenge_required` | akun perlu verifikasi di browser, atau IP VPS dicurigai → pakai proxy (bagian 12). |
+| timer jalan tapi tidak ada lead baru | cek `journalctl -u number-scrap-daily -n 50`; pastikan `keywords.txt` ada di `/opt/number-scrap`. |
+
+Log penting:
+```bash
+journalctl -u number-scrap-web -f
+journalctl -u number-scrap-daily -n 100 --no-pager
 ```
 
 ## Cek cepat setelah deploy
