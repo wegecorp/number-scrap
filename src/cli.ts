@@ -233,6 +233,9 @@ async function cmdDoctor(): Promise<void> {
   console.log(`[doctor] maps / osm    : ${hasMaps ? 'on' : 'off'} / ${config.osmEnabled ? 'on' : 'off'}`);
   console.log(`[doctor] bind          : ${config.host}:${config.port}`);
   console.log(`[doctor] dashboard auth: ${config.dashUser && config.dashPass ? 'on' : 'OFF (wajib saat online)'}`);
+  if (config.dashPass && config.dashPass.length < 12) {
+    console.log('[doctor]   ! DASH_PASS < 12 karakter — terlalu lemah kalau dashboard dibuka ke internet');
+  }
   console.log(`[doctor] DB            : ${existsSync(config.dbPath) ? config.dbPath : `${config.dbPath} (akan dibuat)`}`);
 
   const pyExists = existsSync(config.pythonBin);

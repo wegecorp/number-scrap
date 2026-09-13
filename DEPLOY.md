@@ -232,7 +232,41 @@ ig/venv/bin/pip install -r ig/requirements.txt
 sudo systemctl restart number-scrap-web
 ```
 
-## 15. Troubleshooting
+## 15. Akses dari HP tanpa domain
+
+Dashboard bind ke `127.0.0.1`, jadi harus lewat terowongan. **Jangan** buka port 3100 langsung ke internet (tanpa TLS). Pilih salah satu:
+
+### Opsi A — Tailscale (privat, tidak dibuka ke internet) — disarankan
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up          # login, tautkan akun
+tailscale serve --bg 3100  # proxy tailnet -> 127.0.0.1:3100
+tailscale serve status
+```
+Di HP: install app **Tailscale**, login akun yang sama, lalu buka:
+```
+https://<nama-vps>.<tailnet>.ts.net
+```
+HTTPS otomatis, tidak terlihat publik, tidak perlu buka firewall. Dashboard tetap minta basic auth.
+
+### Opsi B — Cloudflare Tunnel (URL publik instan, tanpa akun/domain)
+
+```bash
+curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+chmod +x /usr/local/bin/cloudflared
+cloudflared tunnel --url http://127.0.0.1:3100
+```
+Muncul URL `https://xxxx.trycloudflare.com` — buka di HP. URL berubah tiap restart.
+
+> Karena ini **membuka dashboard ke internet**: `DASH_PASS` wajib kuat (>=12 karakter, cek `npm run cli -- doctor`). Matikan tunnel (`Ctrl+C`) kalau tidak dipakai.
+
+### Yang tidak disarankan
+```bash
+ufw allow 3100        # jangan — HTTP polos, dasar, rawan
+```
+
+## 16. Troubleshooting
 
 | Gejala | Sebab / solusi |
 |---|---|
