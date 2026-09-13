@@ -255,11 +255,43 @@ HTTPS otomatis, tidak terlihat publik, tidak perlu buka firewall. Dashboard teta
 ```bash
 curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
 chmod +x /usr/local/bin/cloudflared
-cloudflared tunnel --url http://127.0.0.1:3100
-```
-Muncul URL `https://xxxx.trycloudflare.com` — buka di HP. URL berubah tiap restart.
+cloudflared --version
 
-> Karena ini **membuka dashboard ke internet**: `DASH_PASS` wajib kuat (>=12 karakter, cek `npm run cli -- doctor`). Matikan tunnel (`Ctrl+C`) kalau tidak dipakai.
+# uji manual (Ctrl+C untuk stop)
+PORT=3100 bash scripts/tunnel.sh
+```
+Muncul URL `https://xxxx.trycloudflare.com` → buka di HP. URL **berubah tiap restart**.
+
+Jadikan service supaya hidup terus:
+```bash
+sudo tee /etc/systemd/system/cloudflared-quick.service >/dev/null <<'EOF'
+[Unit]
+Description=Cloudflare quick tunnel untuk number-scrap
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/number-scrap
+Environment=PORT=3100
+ExecStart=/usr/bin/bash scripts/tunnel.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now cloudflared-quick
+```
+
+Ambil URL publiknya (ini yang dibuka di HP):
+```bash
+journalctl -u cloudflared-quick -n 50 --no-pager | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com'
+```
+
+> Ini **membuka dashboard ke internet**. `DASH_PASS` wajib kuat (>=12 karakter, cek `npm run cli -- doctor`).
+> Stop kapan saja: `sudo systemctl stop cloudflared-quick`.
 
 ### Yang tidak disarankan
 ```bash
