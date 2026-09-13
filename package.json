@@ -1,0 +1,25 @@
+{
+  "name": "ig-selling",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cli": "node --disable-warning=ExperimentalWarning --import tsx src/cli.ts",
+    "serve": "node --disable-warning=ExperimentalWarning --import tsx src/web/server.ts",
+    "wa": "node --disable-warning=ExperimentalWarning --import tsx src/wa/worker.ts",
+    "selftest": "node --disable-warning=ExperimentalWarning --import tsx src/selftest.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "express": "^4.21.2",
+    "libphonenumber-js": "^1.11.17",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
