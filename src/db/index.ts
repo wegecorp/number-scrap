@@ -252,10 +252,18 @@ export function latestJob(): Job | undefined {
   return db.prepare('SELECT * FROM jobs ORDER BY id DESC LIMIT 1').get() as unknown as Job | undefined;
 }
 
-export function listCampaigns(): Array<{ id: number; name: string; keyword: string; lead_count: number; created_at: string }> {
+export function listCampaigns(
+  opts: { limit?: number; offset?: number } = {},
+): Array<{ id: number; name: string; keyword: string; lead_count: number; created_at: string }> {
+  const limit = opts.limit ?? 200;
+  const offset = opts.offset ?? 0;
   return db
-    .prepare('SELECT id, name, keyword, lead_count, created_at FROM campaigns ORDER BY id DESC LIMIT 200')
-    .all() as unknown as Array<{ id: number; name: string; keyword: string; lead_count: number; created_at: string }>;
+    .prepare('SELECT id, name, keyword, lead_count, created_at FROM campaigns ORDER BY id DESC LIMIT ? OFFSET ?')
+    .all(limit, offset) as unknown as Array<{ id: number; name: string; keyword: string; lead_count: number; created_at: string }>;
+}
+
+export function countCampaigns(): number {
+  return (db.prepare('SELECT COUNT(*) n FROM campaigns').get() as { n: number }).n;
 }
 
 export function matchedLeadsForBlocklist(

@@ -10,6 +10,7 @@ import {
   markContacted,
   deleteLead,
   listCampaigns,
+  countCampaigns,
   createJob,
   finishJob,
   runningJob,
@@ -84,6 +85,16 @@ function filtersFrom(req: express.Request): Filters {
   };
 }
 
+const PER_PAGE_CHOICES = [25, 50, 100];
+
+function pageOpts(req: express.Request, total: number): { page: number; perPage: number } {
+  const raw = Number(req.query.per_page);
+  const perPage = PER_PAGE_CHOICES.includes(raw) ? raw : 25;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  const page = Math.min(Math.max(1, Number(req.query.page) || 1), pages);
+  return { page, perPage };
+}
+
 function baseOpts(): PageOpts {
   return {
     campaigns: listCampaigns(),
@@ -117,16 +128,25 @@ app.get('/', (req, res) => {
     params.push(Number(f.campaign));
   }
 
+  const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const total = (
+    db.prepare(`SELECT COUNT(*) n FROM leads l LEFT JOIN scores s ON s.lead_id = l.id ${whereSql}`).get(...params) as { n: number }
+  ).n;
+  const { page, perPage } = pageOpts(req, total);
+  const offset = (page - 1) * perPage;
   const sql = `SELECT l.*, s.score, s.reason, s.segment, c.keyword AS campaign FROM leads l
     LEFT JOIN scores s ON s.lead_id = l.id
     LEFT JOIN campaigns c ON c.id = l.campaign_id
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-    ORDER BY COALESCE(s.score,0) DESC, l.id DESC LIMIT 500`;
-  const rows = db.prepare(sql).all(...params) as unknown as Array<Record<string, unknown>>;
+    ${whereSql}
+    ORDER BY COALESCE(s.score,0) DESC, l.id DESC LIMIT ? OFFSET ?`;
+  const rows = db.prepare(sql).all(...params, perPage, offset) as unknown as Array<Record<string, unknown>>;
 
   const opts = baseOpts();
   opts.filters = f;
   opts.flash = String(req.query.flash ?? '') || undefined;
+  opts.total = total;
+  opts.page = page;
+  opts.perPage = perPage;
   res.send(leadsPage(rows as never, opts));
 });
 
@@ -248,8 +268,15 @@ app.post('/bulk', (req, res) => {
   res.redirect(req.get('referer') ?? '/');
 });
 
-app.get('/campaigns', (_req, res) => {
-  res.send(campaignsPage(listCampaigns(), baseOpts()));
+app.get('/campaigns', (req, res) => {
+  const total = countCampaigns();
+  const { page, perPage } = pageOpts(req, total);
+  const offset = (page - 1) * perPage;
+  const opts = baseOpts();
+  opts.total = total;
+  opts.page = page;
+  opts.perPage = perPage;
+  res.send(campaignsPage(listCampaigns({ limit: perPage, offset }), opts));
 });
 
 app.post('/campaigns/delete', (req, res) => {
@@ -272,11 +299,18 @@ app.post('/blocklist/add', (req, res) => {
   res.redirect('/blocklist');
 });
 
-app.get('/rejected', (_req, res) => {
+app.get('/rejected', (req, res) => {
+  const total = (db.prepare('SELECT COUNT(*) n FROM rejected').get() as { n: number }).n;
+  const { page, perPage } = pageOpts(req, total);
+  const offset = (page - 1) * perPage;
   const rows = db
-    .prepare('SELECT id, name, source, reason, created_at FROM rejected ORDER BY id DESC LIMIT 500')
-    .all() as unknown as Array<{ id: number; name: string | null; source: string | null; reason: string | null; created_at: string }>;
-  res.send(rejectedPage(rows, baseOpts()));
+    .prepare('SELECT id, name, source, reason, created_at FROM rejected ORDER BY id DESC LIMIT ? OFFSET ?')
+    .all(perPage, offset) as unknown as Array<{ id: number; name: string | null; source: string | null; reason: string | null; created_at: string }>;
+  const opts = baseOpts();
+  opts.total = total;
+  opts.page = page;
+  opts.perPage = perPage;
+  res.send(rejectedPage(rows, opts));
 });
 
 app.get('/stats', (_req, res) => {

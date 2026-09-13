@@ -11,6 +11,9 @@ export type PageOpts = {
   running?: { id: number; cmd: string } | null;
   jobLog?: string;
   flash?: string;
+  total?: number;
+  page?: number;
+  perPage?: number;
 };
 
 export const esc = (v: unknown): string =>
@@ -24,6 +27,31 @@ function qs(f: Filters): string {
   if (f.onlyNew) p.set('new', '1');
   if (f.campaign) p.set('campaign', f.campaign);
   return p.toString();
+}
+
+function pageHref(f: Filters, page: number, perPage: number): string {
+  const p = new URLSearchParams(qs(f));
+  if (page > 1) p.set('page', String(page));
+  if (perPage !== 25) p.set('per_page', String(perPage));
+  return `?${p.toString()}`;
+}
+
+export function pager(f: Filters, page: number, perPage: number, total: number): string {
+  if (total <= 0) return '';
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  const p = Math.min(Math.max(1, page), pages);
+  const from = (p - 1) * perPage + 1;
+  const to = Math.min(total, p * perPage);
+  const prev = p > 1 ? `<a class="pg" href="${esc(pageHref(f, p - 1, perPage))}">« Sebelumnya</a>` : `<span class="pg off">« Sebelumnya</span>`;
+  const next = p < pages ? `<a class="pg" href="${esc(pageHref(f, p + 1, perPage))}">Berikutnya »</a>` : `<span class="pg off">Berikutnya »</span>`;
+  const sizes = [25, 50, 100]
+    .map((n) => (n === perPage ? `<b>${n}</b>` : `<a href="${esc(pageHref(f, 1, n))}">${n}</a>`))
+    .join(' · ');
+  return `<div class="pager">
+ <span class="muted">${from}–${to} dari ${total}</span>
+ <span class="pgrow">${prev}<span class="pg">Hal ${p} / ${pages}</span>${next}</span>
+ <span class="muted">per hal: ${sizes}</span>
+</div>`;
 }
 
 function layout(title: string, body: string): string {
@@ -51,6 +79,30 @@ function layout(title: string, body: string): string {
  .spin{display:inline-block;width:14px;height:14px;border:2px solid #30363d;border-top-color:#7ee787;border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
  @keyframes s{to{transform:rotate(360deg)}}
  .flash{background:#173325;border:1px solid #2ea043;padding:8px 10px;border-radius:8px;margin-bottom:12px}
+ .pager{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:12px 0}
+ .pgrow{display:flex;gap:6px;align-items:center}
+ .pg{display:inline-block;background:#30363d;color:#e6e6e6;padding:8px 12px;border-radius:6px;text-decoration:none}
+ .pg.off{opacity:.4}
+ .pager a b,.pager b{color:#7ee787}
+ @media(max-width:640px){
+  body{font-size:15px}
+  main{padding:12px}
+  header{gap:10px}
+  thead{display:none}
+  table,tr,td{display:block;width:100%}
+  tr{border:1px solid #262b36;border-radius:8px;margin-bottom:10px;padding:6px 2px;background:#141821}
+  tr:hover{background:#141821}
+  td{border:0;padding:5px 10px}
+  td::before{content:attr(data-label);color:#8b949e;display:inline-block;min-width:92px;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .bar{flex-direction:column;align-items:stretch}
+  .bar input,.bar select,.bar textarea,.bar button,.bar a.chat{width:100%;min-height:40px;box-sizing:border-box}
+  .bar label{display:flex;align-items:center;gap:8px;min-height:32px}
+  .msg{max-width:100%}
+  .pager{flex-direction:column;align-items:stretch}
+  .pgrow{justify-content:space-between}
+  .pg{flex:1;text-align:center;min-height:40px}
+  a.chat{display:block;text-align:center;min-height:40px;box-sizing:border-box}
+ }
 </style></head><body>
 <header>
  <strong>number-scrap</strong>
@@ -110,21 +162,22 @@ ${opts.running ? `<p><span class="spin"></span> Job #${opts.running.id} berjalan
  <button type="submit" name="action" value="delete" class="danger" onclick="return confirm('Hapus permanen yang terpilih?')">Hapus terpilih</button>
  <button type="submit" name="action" value="block" class="ghost" onclick="return confirm('Blokir & hapus yang terpilih?')">Blokir terpilih</button>
 </p>
+${pager(f, opts.page ?? 1, opts.perPage ?? 25, opts.total ?? rows.length)}
 <table>
 <thead><tr><th></th><th>Skor</th><th>Nama</th><th>Nomor</th><th>Sumber</th><th>Kota</th><th>Campaign</th><th>Pesan</th><th>Aksi</th></tr></thead>
 <tbody>
 ${rows
   .map(
     (r) => `<tr>
- <td><input type="checkbox" name="ids" value="${r.id}"/></td>
- <td class="score ${scoreClass(r.score)}">${r.score ?? '-'}</td>
- <td>${esc(r.name)}${r.handle ? ` <span class="muted">@${esc(r.handle)}</span>` : ''}</td>
- <td>${r.phone ? esc(r.phone) : '<span class="muted">-</span>'}</td>
- <td>${esc(r.source)}</td>
- <td>${esc(r.city)}</td>
- <td class="muted">${esc(r.campaign ?? '')}</td>
- <td class="msg muted">${esc(r.suggested_message ?? '')}</td>
- <td>
+ <td data-label=""><input type="checkbox" name="ids" value="${r.id}"/></td>
+ <td data-label="Skor" class="score ${scoreClass(r.score)}">${r.score ?? '-'}</td>
+ <td data-label="Nama">${esc(r.name)}${r.handle ? ` <span class="muted">@${esc(r.handle)}</span>` : ''}</td>
+ <td data-label="Nomor">${r.phone ? esc(r.phone) : '<span class="muted">-</span>'}</td>
+ <td data-label="Sumber">${esc(r.source)}</td>
+ <td data-label="Kota">${esc(r.city)}</td>
+ <td data-label="Campaign" class="muted">${esc(r.campaign ?? '')}</td>
+ <td data-label="Pesan" class="msg muted">${esc(r.suggested_message ?? '')}</td>
+ <td data-label="Aksi">
   ${r.phone && !r.contacted_at ? `<a class="chat" target="_blank" href="${esc(chatLink(r.phone, r.suggested_message))}">Chat</a>` : ''}
   ${r.contacted_at ? `<span class="ok">sudah</span>` : `<button class="ghost" type="submit" formaction="/contacted" name="id" value="${r.id}">Tandai</button>`}
   <button class="ghost" type="submit" formaction="/block" name="id" value="${r.id}" onclick="return confirm('Blokir & hapus?')">Blokir</button>
@@ -135,7 +188,7 @@ ${rows
   .join('')}
 </tbody></table>
 </form>
-<p class="muted">${rows.length} lead ditampilkan</p>`;
+${pager(f, opts.page ?? 1, opts.perPage ?? 25, opts.total ?? rows.length)}`;
   return layout('Leads', body);
 }
 
@@ -207,18 +260,19 @@ export function campaignsPage(campaigns: Array<{ id: number; keyword: string; le
 ${campaigns
   .map(
     (c) => `<tr>
- <td>${c.id}</td>
- <td>${esc(c.keyword)}</td>
- <td>${c.lead_count}</td>
- <td class="muted">${esc(c.created_at)}</td>
- <td>
+ <td data-label="#">${c.id}</td>
+ <td data-label="Keyword">${esc(c.keyword)}</td>
+ <td data-label="Lead">${c.lead_count}</td>
+ <td data-label="Dibuat" class="muted">${esc(c.created_at)}</td>
+ <td data-label="Aksi">
   <a class="chat" href="/?campaign=${c.id}">Lihat lead</a>
   <a class="muted" href="/pipeline">jalankan lagi</a>
   <form method="post" action="/campaigns/delete"><input type="hidden" name="id" value="${c.id}"/><button class="danger" type="submit" onclick="return confirm('Hapus campaign #${c.id}?')">Hapus</button></form>
  </td></tr>`,
   )
   .join('')}
-</tbody></table>`;
+</tbody></table>
+${pager(opts.filters, opts.page ?? 1, opts.perPage ?? 25, opts.total ?? campaigns.length)}`;
   return layout('Campaign', body);
 }
 
@@ -239,11 +293,15 @@ export function rejectedPage(rows: Array<{ id: number; name: string | null; sour
   const body = `
 <h3>Rejected (yang dibuang filter)</h3>
 <p class="muted">Untuk menyetel blocklist & filter agar tidak membuang lead yang benar.</p>
-<table><thead><tr><th>#</th><th>Nama</th><th>Sumber</th><th>Alasan</th><th>Waktu</th></tr></thead><tbody>
+<table> <thead><tr><th>#</th><th>Nama</th><th>Sumber</th><th>Alasan</th><th>Waktu</th></tr></thead><tbody>
 ${rows
-  .map((r) => `<tr><td>${r.id}</td><td>${esc(r.name)}</td><td>${esc(r.source)}</td><td class="muted">${esc(r.reason)}</td><td class="muted">${esc(r.created_at)}</td></tr>`)
+  .map(
+    (r) =>
+      `<tr><td data-label="#">${r.id}</td><td data-label="Nama">${esc(r.name)}</td><td data-label="Sumber">${esc(r.source)}</td><td data-label="Alasan" class="muted">${esc(r.reason)}</td><td data-label="Waktu" class="muted">${esc(r.created_at)}</td></tr>`,
+  )
   .join('')}
-</tbody></table>`;
+</tbody></table>
+${pager(opts.filters, opts.page ?? 1, opts.perPage ?? 25, opts.total ?? rows.length)}`;
   return layout('Rejected', body);
 }
 
