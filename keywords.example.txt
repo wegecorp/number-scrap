@@ -1,0 +1,11 @@
+# Satu keyword/intent per baris. Format: <tipe target> <olahraga> <kota>
+# Baris diawali # diabaikan. Contoh: npm run cli -- discover --file keywords.txt --limit 15
+
+SSB Bandung
+SSB Jakarta Selatan
+klub futsal Jakarta Selatan
+akademi basket Surabaya
+tim voli Bekasi
+sekolah sepak bola Yogyakarta
+komunitas badminton Semarang
+turnamen futsal Bandung

@@ -7,6 +7,7 @@ import { chatLink } from './outreach/chat-link.ts';
 import { mentionsFromBio, instaRecordToCandidate } from './discovery/adapters/instagram.ts';
 import { mapOsmResult } from './discovery/adapters/osm.ts';
 import { isSearchJunk } from './discovery/web-search.ts';
+import { searchTerms, cityVariants } from './discovery/index.ts';
 
 let pass = 0;
 function test(name: string, fn: () => void): void {
@@ -115,6 +116,16 @@ test('instaRecordToCandidate: nomor, website, meta', () => {
 test('instaRecordToCandidate: pakai bio_links kalau external_url kosong', () => {
   const c = instaRecordToCandidate({ username: 'a', bio_links: ['https://wa.me/6281234567890'] });
   assert.equal(c.website, 'https://wa.me/6281234567890');
+});
+test('cityVariants: tambah singkatan kota', () => {
+  assert.deepEqual(cityVariants('Kupang'), ['Kupang']);
+  assert.ok(cityVariants('Jakarta Selatan').includes('jaksel'));
+});
+test('searchTerms: hasil banyak & ada varian kota', () => {
+  const terms = searchTerms({ sport: 'sepak bola', targetType: 'ssb', city: 'Jakarta Selatan', googleQueries: [], hashtags: [], synonyms: ['klub', 'akademi'] });
+  assert.ok(terms.length >= 4 && terms.length <= 8);
+  assert.ok(terms.some((t) => t.includes('jaksel')));
+  assert.ok(terms.includes('ssb'));
 });
 
 console.log(`\n${pass} check lulus${process.exitCode ? ' (ada gagal)' : ''}`);

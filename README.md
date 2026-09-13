@@ -61,11 +61,14 @@ Set di `.env`:
 
 ## Perintah
 
+`keywords.example.txt` berisi contoh daftar keyword (satu intent per baris). Untuk daftar asli, buat `keywords.txt` (gitignored).
+
 ```bash
 npm run cli -- models                  # daftar model AI tersedia
 npm run cli -- ping-ai                 # cek koneksi AI + mode JSON
 npm run cli -- expand "<intent>"       # lihat hasil AI expand
 npm run cli -- discover "SSB Bandung" [--limit N]   # cari + enrich + simpan
+npm run cli -- discover --file keywords.txt [--limit N]   # banyak keyword sekaligus
 npm run cli -- score                   # skor AI
 npm run cli -- draft                   # susun pesan
 npm run cli -- contacts                # lead siap dihubungi + link wa.me

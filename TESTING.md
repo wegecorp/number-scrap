@@ -105,6 +105,12 @@ npm run cli -- contacts
 npm run cli -- export leads.csv --new
 ```
 
+Banyak keyword sekaligus: salin `keywords.example.txt` jadi `keywords.txt`, satu intent per baris, lalu:
+```powershell
+npm run cli -- discover --file keywords.txt --limit 10
+```
+`--limit` berlaku **per keyword** (batas jumlah profil IG yang di-fetch tiap intent).
+
 Harapan tiap tahap:
 | Perintah | Harapan |
 |---|---|

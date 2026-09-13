@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { config, hasAI, hasMaps } from './config.ts';
 import {
   db,
@@ -80,6 +80,27 @@ async function cmdDiscover(intent: string, limit?: number): Promise<void> {
   setCampaignLeadCount(campaignId, seen.size);
   console.log(`[discover] tersimpan: ${seen.size} (campaign #${campaignId})`);
   console.log(`[discover] total lead punya nomor: ${listLeads({ withPhone: true }).length}`);
+}
+
+async function cmdDiscoverFile(path: string, limit?: number): Promise<void> {
+  let raw: string;
+  try {
+    raw = readFileSync(path, 'utf8');
+  } catch (err) {
+    console.error(`[discover] gagal baca ${path}: ${(err as Error).message}`);
+    process.exitCode = 1;
+    return;
+  }
+  const intents = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+  if (!intents.length) return console.log(`[discover] tidak ada keyword di ${path}`);
+  console.log(`[discover] ${intents.length} keyword dari ${path}`);
+  for (let i = 0; i < intents.length; i++) {
+    console.log(`\n[discover] (${i + 1}/${intents.length}) ${intents[i]}`);
+    await cmdDiscover(intents[i], limit);
+  }
 }
 
 async function cmdScore(): Promise<void> {
@@ -205,6 +226,7 @@ function usage(): void {
   npm run cli -- ig-check <username>      cek session/proxy IG (429?)
   npm run cli -- expand   "<intent>"      lihat query hasil AI
   npm run cli -- discover "<intent>" [--limit N]   cari + enrich + simpan lead
+  npm run cli -- discover --file keywords.txt [--limit N]   banyak keyword sekaligus
   npm run cli -- score                    skor lead pakai AI
   npm run cli -- draft                    susun pesan siap kirim
   npm run cli -- contacts                 lead siap dihubungi + link wa.me
@@ -233,7 +255,9 @@ async function main(): Promise<void> {
       break;
     case 'discover': {
       const limit = typeof flags.limit === 'string' ? Number(flags.limit) : undefined;
-      await cmdDiscover(positional.join(' '), limit && Number.isFinite(limit) ? limit : undefined);
+      const validLimit = limit && Number.isFinite(limit) ? limit : undefined;
+      if (typeof flags.file === 'string') await cmdDiscoverFile(flags.file, validLimit);
+      else await cmdDiscover(positional.join(' '), validLimit);
       break;
     }
     case 'score':

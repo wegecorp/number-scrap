@@ -30,20 +30,57 @@ function websiteQueries(q: ExpandedQuery): string[] {
   return [`"${key}" kontak`, `"${key}" alamat telepon email`];
 }
 
-function searchTerms(q: ExpandedQuery): string[] {
-  const city = q.city ?? '';
-  const terms = new Set<string>();
-  for (const base of [q.targetType, q.sport, ...q.synonyms.slice(0, 2)]) {
-    const t = `${base} ${city}`.trim();
-    if (t) terms.add(t);
+// Singkatan kota Indonesia -> bikin hasil search IG lebih banyak tanpa salah sasaran.
+const CITY_ABBR: Record<string, string[]> = {
+  'jakarta selatan': ['jaksel'],
+  'jakarta utara': ['jakut'],
+  'jakarta barat': ['jakbar'],
+  'jakarta timur': ['jaktim'],
+  'jakarta pusat': ['jakpus'],
+  bandung: ['bdg'],
+  surabaya: ['sby'],
+  yogyakarta: ['jogja', 'yogya'],
+  semarang: ['smg'],
+  makassar: ['mks'],
+  bekasi: ['bks'],
+  medan: ['mdn'],
+  malang: ['mlg'],
+  denpasar: ['dps'],
+  palembang: ['plm'],
+};
+
+export function cityVariants(city: string): string[] {
+  const c = (city ?? '').toLowerCase().trim();
+  if (!c) return [''];
+  const out = [city.trim()];
+  for (const [full, abbrs] of Object.entries(CITY_ABBR)) {
+    if (c.includes(full)) out.push(...abbrs);
   }
-  return [...terms].slice(0, 4);
+  return [...new Set(out)];
 }
 
-function tournamentSearchTerms(q: ExpandedQuery): string[] {
+export function searchTerms(q: ExpandedQuery): string[] {
+  const terms = new Set<string>();
+  const base = [q.targetType, q.sport].filter(Boolean).join(' ').trim();
+  const bases = [base, q.targetType, q.sport, ...q.synonyms].map((b) => (b ?? '').trim()).filter(Boolean);
+  const cities = cityVariants(q.city ?? '');
+
+  for (const b of bases) {
+    terms.add(`${b} ${cities[0]}`.trim());
+    if (cities[1]) terms.add(`${b} ${cities[1]}`.trim());
+    terms.add(b);
+  }
+  return [...terms].slice(0, 8);
+}
+
+export function tournamentSearchTerms(q: ExpandedQuery): string[] {
   const sport = q.sport || 'sepak bola';
-  const city = q.city ? ` ${q.city}` : '';
-  return [`turnamen ${sport}${city}`.trim(), `liga ${sport}${city}`.trim()];
+  const terms = new Set<string>();
+  for (const city of cityVariants(q.city ?? '').slice(0, 2)) {
+    terms.add(`turnamen ${sport} ${city}`.trim());
+    if (q.targetType) terms.add(`liga ${q.targetType} ${city}`.trim());
+  }
+  return [...terms].slice(0, 4);
 }
 
 function toPlainQuery(raw: string): string {
