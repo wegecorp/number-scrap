@@ -127,6 +127,8 @@ function layout(title: string, body: string): string {
  .ibtn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border-radius:9999px}
  a.chat.ibtn{padding:0;width:38px;height:38px}
  .ibtn svg{width:18px;height:18px;pointer-events:none}
+ .selbar button{display:inline-flex;align-items:center;gap:6px}
+ .selbar button svg{width:18px;height:18px;pointer-events:none}
  .selallwrap{display:flex;align-items:center;gap:6px;color:var(--body);font-size:14px;cursor:pointer;white-space:nowrap}
  .lead{background:var(--canvas);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:8px;overflow:hidden}
  .lead:has(input[name="ids"]:checked){background:var(--pink-soft)}
@@ -159,6 +161,7 @@ function layout(title: string, body: string): string {
   .pg{flex:1;text-align:center;min-height:40px}
   a.chat{display:block;text-align:center;min-height:44px}
   .ibtn,a.chat.ibtn{display:inline-flex;width:44px;height:44px;min-height:44px}
+  .selbar button{flex:1 1 auto;justify-content:center}
  }
 </style></head><body>
 <header>
@@ -248,9 +251,9 @@ ${chips.length ? `<div class="chips">${chips.join('')}<a class="chip" href="/">r
 <div class="selbar">
  <label class="selallwrap"><input type="checkbox" id="selall"/> pilih semua</label>
  <span class="selcount" id="selcount">0 dipilih</span>
- <button type="submit" name="action" value="contacted" data-needsel aria-label="Tandai terpilih" title="Tandai terpilih">${icon('check')}</button>
- <button type="submit" name="action" value="block" class="ghost" data-needsel aria-label="Blokir terpilih" title="Blokir terpilih" onclick="return confirm('Blokir & hapus yang terpilih?')">${icon('ban')}</button>
- <button type="submit" name="action" value="delete" class="danger" data-needsel aria-label="Hapus terpilih" title="Hapus terpilih" onclick="return confirm('Hapus permanen yang terpilih?')">${icon('trash')}</button>
+ <button type="submit" name="action" value="contacted" data-needsel title="Tandai lead terpilih sebagai sudah dihubungi">${icon('check')} Sudah dihubungi</button>
+ <button type="submit" name="action" value="block" class="ghost" data-needsel title="Blokir & hapus lead terpilih" onclick="return confirm('Blokir & hapus yang terpilih?')">${icon('ban')} Blokir</button>
+ <button type="submit" name="action" value="delete" class="danger" data-needsel title="Hapus permanen lead terpilih" onclick="return confirm('Hapus permanen yang terpilih?')">${icon('trash')} Hapus</button>
 </div>
 ${pager(f, opts.page ?? 1, opts.perPage ?? 25, opts.total ?? rows.length)}
 ${rows
