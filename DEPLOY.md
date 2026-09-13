@@ -238,61 +238,34 @@ Dashboard bind ke `127.0.0.1`, jadi harus lewat terowongan. **Jangan** buka port
 
 ### Opsi A — Named tunnel Cloudflare (URL TETAP) — disarankan
 
-Butuh domain yang nameserver-nya sudah diarahkan ke Cloudflare.
+Butuh domain yang nameserver-nya sudah diarahkan ke Cloudflare. Satu perintah:
 
 ```bash
-# 1. login (buka link yang tercetak, pilih domainmu)
-cloudflared tunnel login
-
-# 2. buat tunnel
-cloudflared tunnel create number-scrap
-
-# 3. arahkan subdomain ke tunnel
-cloudflared tunnel route dns number-scrap lead.DOMAINMU.com
-
-# 4. config
-sudo mkdir -p /etc/cloudflared
-sudo tee /etc/cloudflared/config.yml >/dev/null <<EOF
-tunnel: number-scrap
-credentials-file: $HOME/.cloudflared/$(basename $(ls $HOME/.cloudflared/*.json | head -1))
-ingress:
-  - hostname: lead.DOMAINMU.com
-    service: http://127.0.0.1:3100
-  - service: http_status:404
-EOF
+cd /opt/number-scrap
+sudo bash scripts/named-tunnel.sh lead.DOMAINMU.com
 ```
 
-Jadikan service + matikan quick tunnel lama:
-```bash
-sudo systemctl disable --now cloudflared-quick 2>/dev/null || true
-
-sudo tee /etc/systemd/system/cloudflared-named.service >/dev/null <<'EOF'
-[Unit]
-Description=Cloudflare named tunnel (number-scrap)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-ExecStart=/usr/local/bin/cloudflared tunnel --config /etc/cloudflared/config.yml run
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now cloudflared-named
-sudo systemctl status cloudflared-named --no-pager
-```
+Script akan: login sekali (buka link di browser), buat tunnel `number-scrap`, arahkan DNS, tulis `/etc/cloudflared/config.yml`, pasang service `cloudflared-named`, dan matikan quick tunnel lama.
 
 Buka `https://lead.DOMAINMU.com` di HP — **URL ini tidak berubah** walau VPS/cloudflared restart.
 
 Cek:
 ```bash
 cloudflared tunnel list
+systemctl status cloudflared-named --no-pager
 curl -sI https://lead.DOMAINMU.com | head -1        # 401 (basic auth aktif)
 ```
+
+<details><summary>Versi manual (kalau tidak mau pakai script)</summary>
+
+```bash
+cloudflared tunnel login
+cloudflared tunnel create number-scrap
+cloudflared tunnel route dns number-scrap lead.DOMAINMU.com
+# tulis /etc/cloudflared/config.yml (tunnel + credentials-file + ingress ke 127.0.0.1:3100)
+# systemd: cloudflared tunnel --config /etc/cloudflared/config.yml run
+```
+</details>
 
 ### Opsi B — Quick tunnel (tanpa domain, URL berubah)
 Lihat `scripts/tunnel.sh` + service `cloudflared-quick` (URL `*.trycloudflare.com`, berganti tiap restart).
