@@ -64,6 +64,7 @@ PYTHON_BIN=ig/venv/bin/python
 DASH_USER=admin
 DASH_PASS=<password-kuat>
 PORT=3000
+HOST=127.0.0.1
 ```
 `PYTHON_BIN` di Linux wajib `ig/venv/bin/python` (default di kode untuk Windows).
 

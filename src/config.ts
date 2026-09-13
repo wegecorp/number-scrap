@@ -13,6 +13,7 @@ function env(name: string, def = ''): string {
 export const config = {
   dbPath: env('DB_PATH', 'data/app.db'),
   port: Number(env('PORT', '3000')),
+  host: env('HOST', '127.0.0.1'),
   defaultCountry: env('DEFAULT_COUNTRY', 'ID'),
   region: env('REGION', 'ID'),
   language: env('LANGUAGE', 'id'),

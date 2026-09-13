@@ -69,6 +69,6 @@ app.get('/export.csv', (_req, res) => {
   res.send(leadsToCsv(config.minScore));
 });
 
-app.listen(config.port, () => {
-  console.log(`dashboard: http://localhost:${config.port}`);
+app.listen(config.port, config.host, () => {
+  console.log(`dashboard: http://${config.host}:${config.port}`);
 });
