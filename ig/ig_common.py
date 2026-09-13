@@ -30,25 +30,35 @@ def get_client():
     proxy = os.environ.get("IG_PROXY_URL", "").strip()
     if proxy:
         client.set_proxy(proxy)
-        print(f"[ig] proxy aktif", file=sys.stderr)
+        print("[ig] proxy aktif", file=sys.stderr)
 
-    logged_in = False
+    sid = unquote(os.environ.get("IG_SESSIONID", "").strip())
+
+    if sid:
+        # Selalu login fresh dari sessionid -> hindari session.json basi yang bikin login_required.
+        try:
+            client.login_by_sessionid(sid)
+            client.dump_settings(str(SESSION_PATH))
+            print("[ig] login via sessionid OK", file=sys.stderr)
+            return client
+        except Exception as err:  # noqa: BLE001
+            hint = (
+                "[ig] Gagal login dengan IG_SESSIONID.\n"
+                "[ig] Kemungkinan cookie sudah kedaluwarsa / akun kena challenge / IP berubah.\n"
+                "[ig] Ambil ulang cookie 'sessionid' dari browser (DevTools > Application > Cookies),\n"
+                "[ig] update .env, lalu coba lagi. Kalau tetap gagal: pakai proxy atau akun burner lain."
+            )
+            raise SystemExit(f"[ig] {type(err).__name__}: {str(err).splitlines()[0]}\n{hint}") from err
+
     if SESSION_PATH.exists():
         try:
             client.load_settings(str(SESSION_PATH))
-            logged_in = True
+            print("[ig] pakai session.json tersimpan", file=sys.stderr)
+            return client
         except Exception as err:  # noqa: BLE001
-            print(f"[ig] gagal muat session: {err}", file=sys.stderr)
+            raise SystemExit(f"[ig] session.json rusak: {err}") from err
 
-    if not logged_in:
-        sid = unquote(os.environ.get("IG_SESSIONID", "").strip())
-        if not sid:
-            raise SystemExit("[ig] IG_SESSIONID kosong dan session.json tidak ada")
-        client.login_by_sessionid(sid)
-        client.dump_settings(str(SESSION_PATH))
-        print("[ig] login via sessionid OK, session disimpan", file=sys.stderr)
-
-    return client
+    raise SystemExit("[ig] IG_SESSIONID kosong dan session.json tidak ada")
 
 
 def user_to_dict(info) -> dict:
