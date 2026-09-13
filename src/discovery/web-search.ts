@@ -28,14 +28,15 @@ export function isSearchJunk(url: string): boolean {
 }
 
 export async function webSearch(query: string, limit = 25): Promise<string[]> {
+  await politeDelay();
   const provider = config.searchProvider;
   if (provider === 'google-cse' && config.googleCseKey && config.googleCseCx) return googleCse(query, limit);
   if (provider === 'duckduckgo') return duckduckgo(query, limit);
-  if (provider === 'searxng') return searxng(query, limit);
+  if (provider === 'searxng') return searxngMulti(query, limit);
 
   // auto: coba searxng lalu duckduckgo
   try {
-    const r = await searxng(query, limit);
+    const r = await searxngMulti(query, limit);
     if (r.length) return r;
   } catch {
     /* jatuh ke duckduckgo */
@@ -48,6 +49,13 @@ export async function webSearch(query: string, limit = 25): Promise<string[]> {
   }
 }
 
+let lastSearchAt = 0;
+async function politeDelay(): Promise<void> {
+  const wait = config.searchDelayMs - (Date.now() - lastSearchAt);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastSearchAt = Date.now();
+}
+
 let warned = false;
 function warnOnce(msg: string): void {
   if (warned) return;
@@ -55,9 +63,22 @@ function warnOnce(msg: string): void {
   console.warn(msg);
 }
 
-async function searxng(query: string, limit: number): Promise<string[]> {
-  const base = config.searxngUrl.replace(/\/+$/, '');
-  if (!base) throw new Error('SEARXNG_URL kosong');
+async function searxngMulti(query: string, limit: number): Promise<string[]> {
+  let lastErr: Error | undefined;
+  for (const base of config.searxngUrls) {
+    try {
+      const r = await searxng(base, query, limit);
+      if (r.length) return r;
+    } catch (err) {
+      lastErr = err as Error;
+    }
+  }
+  if (lastErr) throw lastErr;
+  throw new Error('searxng: 0 hasil dari semua instance');
+}
+
+async function searxng(base: string, query: string, limit: number): Promise<string[]> {
+  if (!base) throw new Error('instance searxng kosong');
   const url = `${base}/search?q=${encodeURIComponent(query)}&language=${config.language}`;
   const res = await fetch(url, {
     headers: { 'user-agent': UA, accept: 'text/html' },

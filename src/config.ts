@@ -20,7 +20,11 @@ export const config = {
   minScore: Number(env('MIN_SCORE', '60')),
   offer: env('OFFER', 'perlengkapan tim olahraga'),
   searchProvider: env('SEARCH_PROVIDER', 'auto'),
-  searxngUrl: env('SEARXNG_URL', 'https://opnxng.com'),
+  searxngUrls: env('SEARXNG_URLS', env('SEARXNG_URL', 'https://opnxng.com,https://paulgo.io,https://searxng.site'))
+    .split(',')
+    .map((s) => s.trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+  searchDelayMs: Number(env('SEARCH_DELAY_MS', '1500')),
   googleCseKey: env('GOOGLE_CSE_KEY'),
   googleCseCx: env('GOOGLE_CSE_CX'),
   googleMapsKey: env('GOOGLE_MAPS_API_KEY'),
