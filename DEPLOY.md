@@ -165,7 +165,8 @@ lead.contoh.com {
 EOF
 sudo systemctl reload caddy
 ```
-Basic auth dari app sudah aktif (`DASH_USER`/`DASH_PASS`).
+> Angka `3000` harus **sama** dengan `PORT` di `.env`. Cek port aslinya: `journalctl -u number-scrap-web | grep dashboard`.
+> Basic auth dari app sudah aktif (`DASH_USER`/`DASH_PASS`).
 
 ### Tanpa domain (SSH tunnel / Tailscale)
 Lewat SSH tunnel, dashboard tidak perlu dibuka ke publik:
@@ -238,6 +239,7 @@ sudo systemctl restart number-scrap-web
 | `systemctl status` → `Failed to determine user` | baris `User=%i` belum diganti. Set `User=root` atau `User=ubuntu`. |
 | `status=217/USER` | user di `User=` tak ada. Cek `id ubuntu`. |
 | `EADDRINUSE :3000` | port dipakai. `ss -ltnp \| grep 3000`, lalu ganti `PORT` di `.env` atau hentikan proses itu. |
+| `curl :3000` balas **200** padahal harusnya **401** | itu **bukan** app kita — ada proses lain di port itu. Cek `ss -ltnp \| grep 3000` dan bandingkan port yang dipakai service (`journalctl -u number-scrap-web` cetak `dashboard: http://127.0.0.1:<PORT>`). Rapikan `PORT` di `.env` supaya cocok dengan Caddy. |
 | dashboard 502 dari Caddy | app tidak jalan / bind beda. Pastikan `HOST=127.0.0.1`, cek `journalctl -u number-scrap-web -n 50`. |
 | `EACCES` menulis `data/app.db` | folder milik user lain. `sudo chown -R $USER /opt/number-scrap/data`. |
 | `npm: not found` di systemd | npm tak di `/usr/bin`. Cek `which npm`, sesuaikan `ExecStart`. |
