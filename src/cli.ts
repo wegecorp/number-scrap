@@ -17,6 +17,7 @@ import { expandQuery } from './ai/expand.ts';
 import { scoreLeads } from './ai/score.ts';
 import { listModels, pingAI } from './ai/client.ts';
 import { discover } from './discovery/index.ts';
+import { fetchInstagramProfile } from './discovery/adapters/instagram.ts';
 import { enrichContact } from './enrich/index.ts';
 import { draftMessage } from './outreach/draft.ts';
 import { chatLink } from './outreach/chat-link.ts';
@@ -169,6 +170,21 @@ async function cmdPingAI(): Promise<void> {
   }
 }
 
+async function cmdIgCheck(handle: string): Promise<void> {
+  if (!handle) return console.log('pakai: ig-check <username>');
+  const proxy = (process.env.IG_PROXY_URL ?? '').trim();
+  console.log(`[ig-check] handle=${handle} session=${config.igSessionId ? 'ada' : 'kosong'} proxy=${proxy ? 'on' : 'off'} delay=${config.igFetchDelayMs}ms`);
+  try {
+    const c = await fetchInstagramProfile(handle);
+    const meta = (c.meta ?? {}) as { followers?: number };
+    console.log(`[ig-check] OK · ${c.name} · followers=${meta.followers ?? '-'} · phone=${c.phone ?? '-'} · web=${c.website ?? '-'}`);
+    console.log('bio:', (c.bio ?? '').slice(0, 140));
+  } catch (err) {
+    console.error(`[ig-check] gagal: ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+}
+
 function cmdStats(): void {
   const total = db.prepare('SELECT COUNT(*) AS n FROM leads').get() as { n: number };
   const withPhone = db.prepare('SELECT COUNT(*) AS n FROM leads WHERE phone IS NOT NULL').get() as { n: number };
@@ -186,6 +202,7 @@ function usage(): void {
 
   npm run cli -- models                   daftar model AI yang tersedia
   npm run cli -- ping-ai                  cek koneksi AI + mode JSON
+  npm run cli -- ig-check <username>      cek session/proxy IG (429?)
   npm run cli -- expand   "<intent>"      lihat query hasil AI
   npm run cli -- discover "<intent>" [--limit N]   cari + enrich + simpan lead
   npm run cli -- score                    skor lead pakai AI
@@ -207,6 +224,9 @@ async function main(): Promise<void> {
       break;
     case 'ping-ai':
       await cmdPingAI();
+      break;
+    case 'ig-check':
+      await cmdIgCheck(positional[0] ?? '');
       break;
     case 'expand':
       await cmdExpand(positional.join(' '));
