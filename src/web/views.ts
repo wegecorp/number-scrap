@@ -59,53 +59,85 @@ function layout(title: string, body: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${esc(title)}</title>
 <style>
- body{font:14px/1.4 system-ui,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
- header{padding:12px 16px;background:#171a21;display:flex;gap:14px;align-items:center;border-bottom:1px solid #262b36;flex-wrap:wrap}
- header a{color:#9ecbff;text-decoration:none}
- main{padding:16px;max-width:1200px}
- table{border-collapse:collapse;width:100%}
- th,td{border-bottom:1px solid #262b36;padding:6px 8px;text-align:left;vertical-align:top}
- th{position:sticky;top:0;background:#171a21}
- tr:hover{background:#151922}
- .score{font-weight:700}.ok{color:#7ee787}.mid{color:#e3b341}.low{color:#8b949e}
- button{background:#238636;border:0;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;margin:1px}
- button.ghost{background:#30363d}button.danger{background:#8b2d2d}
- a.chat{display:inline-block;background:#075e54;color:#fff;padding:6px 12px;border-radius:6px;text-decoration:none}
- .muted{color:#8b949e}.msg{max-width:320px;white-space:pre-wrap}
+ :root{
+  --canvas:#fffaf0;--soft:#faf5e8;--card:#f5f0e0;--strong:#ebe6d6;
+  --line:#e5e5e5;--line-soft:#f0f0f0;
+  --ink:#0a0a0a;--body:#3a3a3a;--muted:#6a6a6a;--muted-soft:#9a9a9a;
+  --pink:#ff4d8b;--pink-soft:#ffe3ee;--teal:#1a3a3a;
+  --ok:#22c55e;--warn:#f59e0b;--err:#ef4444;
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+ }
+ *{box-sizing:border-box}
+ body{font:15px/1.55 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;background:var(--canvas);color:var(--body)}
+ header{padding:0 20px;min-height:64px;background:var(--canvas);display:flex;gap:2px;align-items:center;border-bottom:1px solid var(--line);flex-wrap:wrap;position:sticky;top:0;z-index:10}
+ .brand{font-weight:700;letter-spacing:-.5px;color:var(--ink);margin-right:12px;font-size:16px}
+ .brand::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--pink);margin-right:8px}
+ header a{color:var(--body);text-decoration:none;font-size:14px;font-weight:500;padding:8px 12px;border-radius:9999px}
+ header a:hover{background:var(--pink-soft);color:var(--ink)}
+ main{padding:24px;max-width:1200px;margin:0 auto}
+ h3{font-size:22px;font-weight:600;letter-spacing:-.4px;color:var(--ink);margin:20px 0 12px}
+ h4{font-size:16px;font-weight:600;color:var(--ink);margin:18px 0 8px}
+ a{color:var(--pink)}
+ table{border-collapse:separate;border-spacing:0;width:100%;background:var(--canvas);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+ th,td{border-bottom:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
+ th{position:sticky;top:64px;background:var(--card);color:var(--ink);font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+ tbody tr:last-child td{border-bottom:0}
+ tr:hover{background:var(--soft)}
+ .score{font-weight:700}.ok{color:var(--ok)}.mid{color:var(--warn)}.low{color:var(--muted-soft)}
+ button{background:var(--pink);border:0;color:#fff;padding:10px 16px;border-radius:var(--r-md);cursor:pointer;margin:1px;font:inherit;font-weight:600;font-size:14px}
+ button:hover{filter:brightness(.95)}
+ button.ghost{background:var(--canvas);color:var(--ink);border:1px solid var(--line)}
+ button.ghost:hover{background:var(--soft);filter:none}
+ button.danger{background:var(--err)}
+ a.chat{display:inline-block;background:var(--teal);color:#fff;padding:10px 16px;border-radius:var(--r-md);text-decoration:none;font-weight:600;font-size:14px}
+ a.chat:hover{filter:brightness(1.2)}
+ code{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+ .muted{color:var(--muted)}.msg{max-width:320px;white-space:pre-wrap}
  form{display:inline;margin:0}
- .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;background:#141821;padding:10px;border-radius:8px}
- input,select,textarea{background:#0f1115;color:#e6e6e6;border:1px solid #30363d;border-radius:6px;padding:6px 8px;font:inherit}
- pre{background:#0f1115;border:1px solid #262b36;padding:10px;border-radius:8px;max-height:320px;overflow:auto;white-space:pre-wrap}
- .spin{display:inline-block;width:14px;height:14px;border:2px solid #30363d;border-top-color:#7ee787;border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
+ .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+ .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:14px;overflow:hidden}
+ .panel>summary{cursor:pointer;padding:14px 18px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:10px;list-style:none;user-select:none}
+ .panel>summary::-webkit-details-marker{display:none}
+ .panel>summary::after{content:"▾";margin-left:auto;color:var(--muted);font-size:12px;transition:transform .15s}
+ .panel[open]>summary::after{transform:rotate(180deg)}
+ .panel[open]>summary{border-bottom:1px solid var(--line)}
+ .panel>p,.panel>form,.panel>.bar{padding:14px 18px}
+ .panel>form{display:block}
+ .badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:9999px;background:var(--pink);color:#fff;font-size:12px;font-weight:600}
+ input,select,textarea{background:var(--canvas);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;font:inherit}
+ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ink)}
+ pre{background:var(--soft);border:1px solid var(--line);padding:14px;border-radius:var(--r-lg);max-height:320px;overflow:auto;white-space:pre-wrap;color:var(--body)}
+ .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--pink);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
  @keyframes s{to{transform:rotate(360deg)}}
- .flash{background:#173325;border:1px solid #2ea043;padding:8px 10px;border-radius:8px;margin-bottom:12px}
- .pager{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:12px 0}
+ .flash{background:var(--pink-soft);border:1px solid var(--pink);color:var(--ink);padding:10px 14px;border-radius:var(--r-lg);margin-bottom:14px}
+ .pager{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:14px 0}
  .pgrow{display:flex;gap:6px;align-items:center}
- .pg{display:inline-block;background:#30363d;color:#e6e6e6;padding:8px 12px;border-radius:6px;text-decoration:none}
+ .pg{display:inline-block;background:var(--card);border:1px solid var(--line);color:var(--ink);padding:8px 12px;border-radius:var(--r-md);text-decoration:none}
+ .pg:hover{background:var(--pink-soft)}
  .pg.off{opacity:.4}
- .pager a b,.pager b{color:#7ee787}
+ .pager a b,.pager b{color:var(--pink)}
  @media(max-width:640px){
-  body{font-size:15px}
-  main{padding:12px}
-  header{gap:10px}
+  main{padding:16px}
+  header{min-height:auto;padding:10px 14px;gap:4px}
   thead{display:none}
+  table{border:0;background:transparent}
   table,tr,td{display:block;width:100%}
-  tr{border:1px solid #262b36;border-radius:8px;margin-bottom:10px;padding:6px 2px;background:#141821}
-  tr:hover{background:#141821}
-  td{border:0;padding:5px 10px}
-  td::before{content:attr(data-label);color:#8b949e;display:inline-block;min-width:92px;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  tr{border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:10px;padding:6px 2px;background:var(--canvas)}
+  tr:hover{background:var(--canvas)}
+  td{border:0;padding:6px 12px}
+  td::before{content:attr(data-label);color:var(--muted);display:inline-block;min-width:92px;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
   .bar{flex-direction:column;align-items:stretch}
-  .bar input,.bar select,.bar textarea,.bar button,.bar a.chat{width:100%;min-height:40px;box-sizing:border-box}
+  .bar input,.bar select,.bar textarea,.bar button,.bar a.chat{width:100%;min-height:44px}
   .bar label{display:flex;align-items:center;gap:8px;min-height:32px}
   .msg{max-width:100%}
   .pager{flex-direction:column;align-items:stretch}
   .pgrow{justify-content:space-between}
   .pg{flex:1;text-align:center;min-height:40px}
-  a.chat{display:block;text-align:center;min-height:40px;box-sizing:border-box}
+  a.chat{display:block;text-align:center;min-height:44px}
  }
 </style></head><body>
 <header>
- <strong>number-scrap</strong>
+ <span class="brand">number-scrap</span>
  <a href="/">Leads</a>
  <a href="/pipeline">Pipeline</a>
  <a href="/campaigns">Campaign</a>
@@ -138,30 +170,37 @@ export function leadsPage(rows: Row[], opts: PageOpts): string {
     .join('');
   const sourceOptions = opts.sources.map((s) => `<option value="${esc(s)}" ${f.source === s ? 'selected' : ''}>${esc(s)}</option>`).join('');
   const exportHref = `/export.csv${qs(f) ? '?' + qs(f) : ''}`;
+  const activeCount = [f.q, f.source, f.campaign, f.minScore ? 'x' : '', f.onlyNew ? 'x' : ''].filter(Boolean).length;
 
   const body = `
 ${opts.flash ? `<div class="flash">${esc(opts.flash)}</div>` : ''}
 ${opts.running ? `<p><span class="spin"></span> Job #${opts.running.id} berjalan — <a href="/pipeline">lihat progres</a></p>` : ''}
-<form method="get" action="/" class="bar">
- <input type="search" name="q" placeholder="cari nama/nomor/kota" value="${esc(f.q)}"/>
- <select name="source"><option value="">semua sumber</option>${sourceOptions}</select>
- <select name="campaign"><option value="">semua campaign</option>${campaignOptions}</select>
- <input type="number" name="min_score" min="0" max="100" placeholder="min skor" value="${f.minScore || ''}" style="width:90px"/>
- <label><input type="checkbox" name="new" value="1" ${f.onlyNew ? 'checked' : ''}/> belum dihubungi</label>
- <button type="submit">Filter</button>
- <a href="/" class="muted">reset</a>
- <a href="${esc(exportHref)}" class="muted">export CSV (sesuai filter)</a>
-</form>
-<form method="post" action="/clean" class="bar">
- <span class="muted">Bersihkan hasil${f.campaign ? ` (campaign terpilih)` : ' (semua)'}:</span>
- <input type="hidden" name="campaign" value="${esc(f.campaign)}"/>
- <label><input type="checkbox" name="ai" value="1" checked/> pakai AI</label>
- <button type="submit" class="ghost">Preview &amp; bersihkan</button>
-</form>
-<form method="post" action="/draft" class="bar">
- <span class="muted">Susun pesan untuk lead berskor tanpa pesan:</span>
- <button type="submit">Susun pesan</button>
-</form>
+<details class="panel">
+ <summary>Filter &amp; Pencarian${activeCount ? ` <span class="badge">${activeCount}</span>` : ''}</summary>
+ <form method="get" action="/" class="bar">
+  <input type="search" name="q" placeholder="cari nama/nomor/kota" value="${esc(f.q)}"/>
+  <select name="source"><option value="">semua sumber</option>${sourceOptions}</select>
+  <select name="campaign"><option value="">semua campaign</option>${campaignOptions}</select>
+  <input type="number" name="min_score" min="0" max="100" placeholder="min skor" value="${f.minScore || ''}" style="width:100px"/>
+  <label><input type="checkbox" name="new" value="1" ${f.onlyNew ? 'checked' : ''}/> belum dihubungi</label>
+  <button type="submit">Terapkan</button>
+  <a href="/" class="muted">reset</a>
+  <a href="${esc(exportHref)}" class="muted">export CSV</a>
+ </form>
+</details>
+<details class="panel">
+ <summary>Aksi lain</summary>
+ <form method="post" action="/clean" class="bar">
+  <span class="muted">Bersihkan hasil${f.campaign ? ` (campaign terpilih)` : ' (semua)'}:</span>
+  <input type="hidden" name="campaign" value="${esc(f.campaign)}"/>
+  <label><input type="checkbox" name="ai" value="1" checked/> pakai AI</label>
+  <button type="submit" class="ghost">Preview &amp; bersihkan</button>
+ </form>
+ <form method="post" action="/draft" class="bar">
+  <span class="muted">Susun pesan untuk lead berskor tanpa pesan:</span>
+  <button type="submit">Susun pesan</button>
+ </form>
+</details>
 <form method="post" action="/bulk">
 <p>
  <button type="submit" name="action" value="contacted">Tandai terpilih</button>
