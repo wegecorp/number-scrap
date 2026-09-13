@@ -14,9 +14,8 @@ import {
 import type { LeadRecord, Candidate } from './types.ts';
 import { expandQuery } from './ai/expand.ts';
 import { listModels, pingAI } from './ai/client.ts';
-import { candidateKey } from './ai/relevance.ts';
-import { filterCandidates } from './filter/index.ts';
-import { loadBlocklist, isBadCandidate, appendBlocklist } from './filter/blocklist.ts';
+import { appendBlocklist } from './filter/blocklist.ts';
+import { previewClean, applyClean } from './filter/clean.ts';
 import { fetchInstagramProfile } from './discovery/adapters/instagram.ts';
 import { chatLink } from './outreach/chat-link.ts';
 import { leadsToCsv } from './export/csv.ts';
@@ -95,53 +94,16 @@ function cmdContacts(): void {
 }
 
 async function cmdClean(opts: { dry: boolean; ai: boolean }): Promise<void> {
-  const rows = db.prepare('SELECT * FROM leads').all() as unknown as LeadRecord[];
-  if (!rows.length) return console.log('[clean] tidak ada lead');
-  const bl = loadBlocklist(undefined, true);
-
-  const blocked: LeadRecord[] = [];
-  const cands: Candidate[] = [];
-  const byKey = new Map<string, LeadRecord>();
-  for (const r of rows) {
-    if (isBadCandidate({ name: r.name, bio: r.bio, website: r.website, url: r.url, handle: r.handle }, bl)) {
-      blocked.push(r);
-      continue;
-    }
-    const c: Candidate = {
-      source: r.source,
-      handle: r.handle ?? undefined,
-      name: r.name,
-      city: r.city ?? undefined,
-      bio: r.bio ?? undefined,
-      website: r.website ?? undefined,
-      url: r.url ?? undefined,
-      phone: r.phone ?? undefined,
-    };
-    cands.push(c);
-    byKey.set(candidateKey(c), r);
-  }
-
-  let dropLeads: LeadRecord[] = [];
-  if (opts.ai) {
-    const { dropped } = await filterCandidates(cands, undefined, { ai: true });
-    dropLeads = dropped.map((d) => byKey.get(d.key)).filter((x): x is LeadRecord => !!x);
-  }
-
-  const all = [...blocked, ...dropLeads];
-  console.log(`[clean] total lead: ${rows.length}`);
-  console.log(`[clean] bloklist    : ${blocked.length}`);
-  if (opts.ai) console.log(`[clean] tak relevan : ${dropLeads.length}`);
-
-  for (const r of all.slice(0, 15)) console.log(`  #${r.id} ${r.name} [${r.source}] ${r.phone ?? '-'}`);
-  if (all.length > 15) console.log(`  ... dan ${all.length - 15} lagi`);
-
+  const items = await previewClean({ ai: opts.ai });
+  if (!items.length) return console.log('[clean] tidak ada yang perlu dibuang');
+  console.log(`[clean] ${items.length} lead layak dibuang${opts.ai ? ' (termasuk relevansi AI)' : ''}:`);
+  for (const it of items.slice(0, 15)) console.log(`  #${it.id} ${it.name} [${it.source}] - ${it.reason}`);
+  if (items.length > 15) console.log(`  ... dan ${items.length - 15} lagi`);
   if (opts.dry) {
-    console.log('[clean] DRY RUN — tidak ada yang dihapus. Jalankan tanpa --dry untuk hapus permanen.');
+    console.log('[clean] DRY RUN - tidak ada yang dihapus. Jalankan tanpa --dry untuk hapus permanen.');
     return;
   }
-  for (const r of all) deleteLead(r.id);
-  addRejected(all.map((r) => ({ key: r.phone ?? `${r.source}:${r.handle ?? r.name}`, name: r.name, source: r.source, reason: 'clean' })));
-  console.log(`[clean] dihapus permanen: ${all.length}`);
+  console.log(`[clean] dihapus permanen: ${applyClean(items)}`);
 }
 
 function cmdBlock(args: string[]): void {

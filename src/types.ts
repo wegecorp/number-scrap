@@ -21,6 +21,7 @@ export type ExpandedQuery = {
   googleQueries: string[];
   hashtags: string[];
   synonyms: string[];
+  searchPhrases?: string[];
   tooBroad?: boolean;
 };
 

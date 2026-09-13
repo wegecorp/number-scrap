@@ -35,14 +35,33 @@ type Row = {
   contacted_at: string | null;
 };
 
-export function leadsToCsv(minScore = 0, opts: { uncontactedOnly?: boolean } = {}): string {
+export function leadsToCsv(
+  minScore = 0,
+  opts: { uncontactedOnly?: boolean; q?: string; source?: string; campaignId?: number } = {},
+): string {
+  const where: string[] = ['l.phone IS NOT NULL', 'COALESCE(s.score,0) >= ?'];
+  const params: Array<string | number> = [minScore];
+  if (opts.uncontactedOnly) where.push('l.contacted_at IS NULL');
+  if (opts.source) {
+    where.push('l.source = ?');
+    params.push(opts.source);
+  }
+  if (opts.campaignId) {
+    where.push('l.campaign_id = ?');
+    params.push(opts.campaignId);
+  }
+  if (opts.q) {
+    where.push('(l.name LIKE ? OR l.handle LIKE ? OR l.phone LIKE ? OR l.city LIKE ?)');
+    const like = `%${opts.q}%`;
+    params.push(like, like, like, like);
+  }
+
   const sql = `SELECT l.id,l.source,l.name,l.handle,l.city,l.phone,l.email,l.website,
               COALESCE(s.score,0) AS score, s.segment, s.reason, l.suggested_message, l.contacted_at
        FROM leads l LEFT JOIN scores s ON s.lead_id = l.id
-       WHERE l.phone IS NOT NULL AND COALESCE(s.score,0) >= ?
-         ${opts.uncontactedOnly ? 'AND l.contacted_at IS NULL' : ''}
+       WHERE ${where.join(' AND ')}
        ORDER BY score DESC, l.id DESC`;
-  const rows = db.prepare(sql).all(minScore) as unknown as Row[];
+  const rows = db.prepare(sql).all(...params) as unknown as Row[];
 
   const escape = (v: unknown): string => {
     const s = v == null ? '' : String(v);

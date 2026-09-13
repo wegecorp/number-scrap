@@ -141,13 +141,16 @@ Buka http://localhost:3000:
 | Aksi | Harapan |
 |---|---|
 | Tabel lead | skor berwarna, nomor, campaign tampil |
-| Filter bar | cari/sumber/min skor/campaign menyaring hasil |
+| Filter bar | cari/sumber/min skor/campaign menyaring hasil; export CSV ikut filter |
 | Tombol **Chat** | buka `wa.me/...?text=...` dengan pesan terisi |
 | Tombol **Tandai** | lead pindah keluar dari "Belum dihubungi" |
-| Tombol **Blokir** | lead dihapus + masuk `blocklist.txt` (untuk IG → pakai handle, bukan instagram.com) |
+| Centang banyak + bulk | Tandai/Hapus/Blokir massal |
+| Tombol **Blokir** | lead dihapus + masuk `blocklist.txt` (IG → pakai handle, bukan instagram.com) |
 | Tombol **Hapus** | lead hilang permanen |
-| Tombol **Susun pesan** | lead berskor tanpa pesan jadi terisi |
-| `/run` | isi keyword, jalankan; muncul spinner + log, tabel terisi setelah selesai |
+| **Preview & bersihkan** | halaman daftar yang akan dibuang + tombol konfirmasi |
+| `/pipeline` | isi kata kunci → **Saran AI** → frasa muncul (editable) → Jalankan |
+| `/run` (dari pipeline) | spinner + log bergulir, campaign baru muncul setelah selesai |
+| `/campaigns`, `/blocklist`, `/rejected`, `/stats` | halaman terbuka & terisi |
 | `/export.csv` | kolom `chat_link` + `suggested_message` terisi |
 
 Stop: `Ctrl+C`.

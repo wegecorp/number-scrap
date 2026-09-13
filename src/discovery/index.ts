@@ -60,6 +60,9 @@ export function cityVariants(city: string): string[] {
 }
 
 export function searchTerms(q: ExpandedQuery): string[] {
+  if (q.searchPhrases?.length) {
+    return [...new Set(q.searchPhrases.map((s) => s.trim()).filter(Boolean))].slice(0, 10);
+  }
   const terms = new Set<string>();
   const base = [q.targetType, q.sport].filter(Boolean).join(' ').trim();
   const bases = [base, q.targetType, q.sport, ...q.synonyms].map((b) => (b ?? '').trim()).filter(Boolean);

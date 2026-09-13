@@ -1,4 +1,4 @@
-import type { Candidate } from './types.ts';
+import type { Candidate, ExpandedQuery } from './types.ts';
 import {
   db,
   upsertLead,
@@ -21,13 +21,14 @@ import { config } from './config.ts';
 export type Logger = (line: string) => void;
 const consoleLogger: Logger = (line) => console.log(line);
 
-export async function runDiscover(intent: string, limit?: number, log: Logger = consoleLogger): Promise<number> {
-  const q = await expandQuery(intent);
-  if (q.tooBroad) {
-    log('! Intent terlalu luas. Tambahkan tipe target + kota, contoh: "SSB Bandung".');
-    return 0;
-  }
-  const campaignId = createCampaign(intent.slice(0, 60), intent, q);
+/** Jalankan discovery untuk satu query yang sudah jadi (tanpa expand AI). */
+export async function runDiscoverQuery(
+  q: ExpandedQuery,
+  limit: number | undefined,
+  log: Logger,
+  label: string,
+): Promise<number> {
+  const campaignId = createCampaign(label.slice(0, 60), label, q);
 
   const candidates = await discover(q, { limit });
   log(`[discover] kandidat: ${candidates.length}`);
@@ -65,7 +66,16 @@ export async function runDiscover(intent: string, limit?: number, log: Logger = 
   setCampaignLeadCount(campaignId, seen.size);
   log(`[discover] tersimpan: ${seen.size} (campaign #${campaignId})`);
   log(`[discover] total lead punya nomor: ${listLeads({ withPhone: true }).length}`);
-  return seen.size;
+  return campaignId;
+}
+
+export async function runDiscover(intent: string, limit?: number, log: Logger = consoleLogger): Promise<number> {
+  const q = await expandQuery(intent);
+  if (q.tooBroad) {
+    log('! Intent terlalu luas. Tambahkan tipe target + kota, contoh: "SSB Bandung".');
+    return 0;
+  }
+  return runDiscoverQuery(q, limit, log, intent);
 }
 
 export async function runScore(log: Logger = consoleLogger): Promise<void> {
@@ -100,6 +110,33 @@ export async function runDraft(log: Logger = consoleLogger): Promise<void> {
     made++;
   }
   log(`[draft] pesan disusun: ${made}`);
+}
+
+/** Setiap term = satu campaign, memakai frasa persis (tanpa expand AI lagi). */
+export async function runPipelineFromTerms(terms: string[], limit: number, log: Logger = consoleLogger): Promise<number[]> {
+  const clean = terms.map((t) => t.trim()).filter((t) => t && !t.startsWith('#'));
+  const campaignIds: number[] = [];
+  log(`[run] ${clean.length} keyword, limit ${limit}`);
+  for (let i = 0; i < clean.length; i++) {
+    const term = clean[i];
+    log(`\n[run] (${i + 1}/${clean.length}) ${term}`);
+    const q: ExpandedQuery = {
+      sport: '',
+      targetType: '',
+      city: '',
+      googleQueries: [`site:instagram.com ${term}`],
+      hashtags: [],
+      synonyms: [term],
+      searchPhrases: [term],
+    };
+    const cid = await runDiscoverQuery(q, limit, log, term);
+    campaignIds.push(cid);
+    log(`[run] ${term}: selesai`);
+  }
+  await runScore(log);
+  await runDraft(log);
+  log('[run] selesai');
+  return campaignIds;
 }
 
 export async function runPipeline(keywords: string[], limit: number, log: Logger = consoleLogger): Promise<void> {

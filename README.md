@@ -14,7 +14,12 @@ keyword -> AI expand -> discovery -> enrich -> AI skor -> draft pesan -> klik Ch
 - **Enrich**: baca bio, resolve link-in-bio (linktree/lynk.id/shortlink), crawl halaman kontak. Nomor dinormalisasi ke E.164.
 - **Kualifikasi AI**: skor 0-100 + alasan + segmentasi (`ssb`/`klub`/`akademi`/`turnamen`).
 - **Filter 3 lapis**: bloklist (`blocklist.txt`) → relevansi → AI (buang konten dewasa/judi/spam). `npm run cli -- clean`.
-- **Dashboard**: filter (cari/sumber/skor/campaign), aksi Chat/Tandai/Blokir/Hapus, dan halaman **Jalankan** pipeline dengan progres.
+- **Dashboard** (`npm run serve`):
+  - **Pipeline** — tulis kata kunci → **Saran AI** (frasa bisa diedit) → Jalankan (cari+skor+pesan) dengan progres & log.
+  - **Leads** — filter (cari/sumber/skor/campaign), aksi massal (Tandai/Hapus/Blokir), Chat click-to-chat.
+  - **Bersihkan hasil** — preview lalu hapus permanen (bloklist + relevansi AI).
+  - **Campaign / Blocklist / Rejected / Stats** — kelola keyword, daftar terlarang, audit yang dibuang, ringkasan.
+  - **Export CSV** mengikuti filter yang aktif.
 - **Click-to-chat**: export/dashboard berisi link `wa.me` dengan pesan sudah terisi.
 - **DNC list**: nomor yang di-suppress tidak akan dihubungi lagi.
 
@@ -84,6 +89,17 @@ npm run cli -- stats
 
 npm run serve   # dashboard http://localhost:3000
 npm run selftest
+```
+
+## Alur dashboard
+```
+/pipeline  : kata kunci -> Saran AI -> (edit frasa) -> Jalankan
+   (cari + skor + susun pesan jalan di latar, lihat log)
+/          : filter hasil, bulk Hapus/Blokir, Chat, Bersihkan hasil
+/campaigns : lihat lead per keyword, hapus campaign
+/blocklist : tambah kata/domain terlarang
+/rejected  : apa yang dibuang filter & alasannya
+/stats     : ringkasan
 ```
 
 ## Stack
