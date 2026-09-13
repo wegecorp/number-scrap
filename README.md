@@ -13,6 +13,8 @@ keyword -> AI expand -> discovery -> enrich -> AI skor -> draft pesan -> klik Ch
 - **Discovery**: Google/DuckDuckGo (`site:instagram.com`), Google Maps Places, halaman kontak website, tim peserta dari tag akun turnamen, plus **AI seed expansion** (cari lebih dalam dari satu keyword).
 - **Enrich**: baca bio, resolve link-in-bio (linktree/lynk.id/shortlink), crawl halaman kontak. Nomor dinormalisasi ke E.164.
 - **Kualifikasi AI**: skor 0-100 + alasan + segmentasi (`ssb`/`klub`/`akademi`/`turnamen`).
+- **Filter 3 lapis**: bloklist (`blocklist.txt`) → relevansi → AI (buang konten dewasa/judi/spam). `npm run cli -- clean`.
+- **Dashboard**: filter (cari/sumber/skor/campaign), aksi Chat/Tandai/Blokir/Hapus, dan halaman **Jalankan** pipeline dengan progres.
 - **Click-to-chat**: export/dashboard berisi link `wa.me` dengan pesan sudah terisi.
 - **DNC list**: nomor yang di-suppress tidak akan dihubungi lagi.
 
@@ -75,6 +77,8 @@ npm run cli -- draft                   # susun pesan
 npm run cli -- contacts                # lead siap dihubungi + link wa.me
 npm run cli -- mark <id...>            # tandai sudah dihubungi
 npm run cli -- suppress <nomor>        # masukkan ke DNC
+npm run cli -- clean [--dry] [--ai]    # hapus lead sampah (bloklist; --ai = relevansi AI)
+npm run cli -- block <kata|domain>     # tambah ke blocklist.txt
 npm run cli -- export [file] [--new]   # export CSV
 npm run cli -- stats
 

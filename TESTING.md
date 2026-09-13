@@ -111,6 +111,15 @@ npm run cli -- discover --file keywords.txt --limit 10
 ```
 `--limit` berlaku **per keyword** (batas jumlah profil IG yang di-fetch tiap intent).
 
+### Bersihkan lead sampah (porn/judi/spam)
+```powershell
+npm run cli -- clean --dry          # lihat dulu (bloklist)
+npm run cli -- clean --dry --ai     # + relevansi AI (buang tak relevan)
+npm run cli -- clean --ai           # hapus permanen
+npm run cli -- block <kata|domain>  # tambah ke blocklist.txt
+```
+Atur daftar terlarang di `blocklist.txt` (`term:` untuk kata, `host:` untuk domain).
+
 Harapan tiap tahap:
 | Perintah | Harapan |
 |---|---|
@@ -131,10 +140,14 @@ Buka http://localhost:3000:
 
 | Aksi | Harapan |
 |---|---|
-| Tabel lead | skor berwarna, nomor tampil |
+| Tabel lead | skor berwarna, nomor, campaign tampil |
+| Filter bar | cari/sumber/min skor/campaign menyaring hasil |
 | Tombol **Chat** | buka `wa.me/...?text=...` dengan pesan terisi |
 | Tombol **Tandai** | lead pindah keluar dari "Belum dihubungi" |
+| Tombol **Blokir** | lead dihapus + masuk `blocklist.txt` (untuk IG → pakai handle, bukan instagram.com) |
+| Tombol **Hapus** | lead hilang permanen |
 | Tombol **Susun pesan** | lead berskor tanpa pesan jadi terisi |
+| `/run` | isi keyword, jalankan; muncul spinner + log, tabel terisi setelah selesai |
 | `/export.csv` | kolom `chat_link` + `suggested_message` terisi |
 
 Stop: `Ctrl+C`.

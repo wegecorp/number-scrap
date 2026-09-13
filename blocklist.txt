@@ -1,0 +1,51 @@
+# Bloklist number-scrap — satu entri per baris.
+# Format:
+#   term:<kata>     -> cocokkan di nama/bio/website (huruf kecil, substring)
+#   host:<domain>   -> cocokkan hostname (termasuk subdomain)
+# Baris diawali # = komentar. Tambah sesuai kebutuhan.
+
+# --- konten dewasa ---
+term:bokep
+term:xxx
+term:porno
+term:porn
+term:onlyfans
+term:adult
+term:telanjang
+term:syur
+term:colmek
+term:bispak
+host:onlyfans.com
+host:pornhub.com
+host:xvideos.com
+host:xhamster.com
+
+# --- judi / slot ---
+term:judi
+term:togel
+term:slot gacor
+term:slot88
+term:casino
+term:bandar togel
+term:situs gacor
+term:maxwin
+
+# --- pinjaman / spam keuangan ---
+term:pinjol
+term:pinjaman online
+term:jasa pinjam
+
+# --- spam link / shortener farm ---
+host:bit.ly
+host:s.id
+host:tinyurl.com
+host:t.co
+term:t.me/
+term:join grup telegram
+
+# --- TLD yang dihindari (host:.<tld>) ---
+host:.xxx
+host:.porn
+host:.adult
+host:.sex
+host:.cam

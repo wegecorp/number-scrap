@@ -3,26 +3,24 @@ import { spawn } from 'node:child_process';
 import { config, hasAI, hasMaps } from './config.ts';
 import {
   db,
-  upsertLead,
   listLeads,
-  saveScore,
   getScore,
-  setSuggestedMessage,
   markContacted,
   addSuppression,
-  createCampaign,
-  setCampaignLeadCount,
+  deleteLead,
+  addRejected,
+  countRejected,
 } from './db/index.ts';
-import type { LeadRecord } from './types.ts';
+import type { LeadRecord, Candidate } from './types.ts';
 import { expandQuery } from './ai/expand.ts';
-import { scoreLeads } from './ai/score.ts';
 import { listModels, pingAI } from './ai/client.ts';
-import { discover } from './discovery/index.ts';
+import { candidateKey } from './ai/relevance.ts';
+import { filterCandidates } from './filter/index.ts';
+import { loadBlocklist, isBadCandidate, appendBlocklist } from './filter/blocklist.ts';
 import { fetchInstagramProfile } from './discovery/adapters/instagram.ts';
-import { enrichContact } from './enrich/index.ts';
-import { draftMessage } from './outreach/draft.ts';
 import { chatLink } from './outreach/chat-link.ts';
 import { leadsToCsv } from './export/csv.ts';
+import { runDiscover, runScore, runDraft } from './pipeline.ts';
 
 function parseArgs(args: string[]): { positional: string[]; flags: Record<string, string | true> } {
   const positional: string[] = [];
@@ -52,35 +50,7 @@ async function cmdExpand(intent: string): Promise<void> {
 }
 
 async function cmdDiscover(intent: string, limit?: number): Promise<void> {
-  const q = await expandQuery(intent);
-  if (q.tooBroad) {
-    console.log('! Intent terlalu luas. Tambahkan tipe target + kota, contoh: "SSB Bandung".');
-    return;
-  }
-  const campaignId = createCampaign(intent.slice(0, 60), intent, q);
-
-  const candidates = await discover(q, { limit });
-  console.log(`[discover] kandidat: ${candidates.length}`);
-
-  const seen = new Set<number>();
-  for (const c of candidates) {
-    const contact = await enrichContact(c);
-    const id = upsertLead({
-      ...c,
-      phone: c.phone ?? contact.phones[0],
-      email: c.email ?? contact.emails[0],
-    });
-    if (contact.phones.length > 1 || contact.emails.length > 1) {
-      db.prepare("UPDATE leads SET meta = json_set(COALESCE(meta,'{}'), '$.extraContacts', ?) WHERE id = ?").run(
-        JSON.stringify({ phones: contact.phones, emails: contact.emails }),
-        id,
-      );
-    }
-    seen.add(id);
-  }
-  setCampaignLeadCount(campaignId, seen.size);
-  console.log(`[discover] tersimpan: ${seen.size} (campaign #${campaignId})`);
-  console.log(`[discover] total lead punya nomor: ${listLeads({ withPhone: true }).length}`);
+  await runDiscover(intent, limit);
 }
 
 async function cmdDiscoverFile(path: string, limit?: number): Promise<void> {
@@ -105,35 +75,11 @@ async function cmdDiscoverFile(path: string, limit?: number): Promise<void> {
 }
 
 async function cmdScore(): Promise<void> {
-  const leads = listLeads({ withPhone: true, unscored: true });
-  if (!leads.length) return console.log('tidak ada lead baru untuk diskor');
-  console.log(`[score] menilai ${leads.length} lead...`);
-  const { scores, model } = await scoreLeads(leads);
-  for (const s of scores) saveScore(s, model);
-  console.log(`[score] selesai (model: ${model})`);
-}
-
-function leadsNeedingDraft(): LeadRecord[] {
-  return db
-    .prepare(
-      `SELECT l.* FROM leads l LEFT JOIN scores s ON s.lead_id = l.id
-       WHERE l.phone IS NOT NULL AND l.suggested_message IS NULL AND COALESCE(s.score,0) >= ?
-       ORDER BY COALESCE(s.score,0) DESC`,
-    )
-    .all(config.minScore) as unknown as LeadRecord[];
+  await runScore();
 }
 
 async function cmdDraft(): Promise<void> {
-  const leads = leadsNeedingDraft();
-  if (!leads.length) return console.log('tidak ada lead yang perlu pesan');
-  let made = 0;
-  for (const lead of leads) {
-    const s = getScore(lead.id);
-    const body = await draftMessage(lead, s?.template_id);
-    setSuggestedMessage(lead.id, body);
-    made++;
-  }
-  console.log(`[draft] pesan disusun: ${made}`);
+  await runDraft();
 }
 
 function cmdContacts(): void {
@@ -146,6 +92,63 @@ function cmdContacts(): void {
     console.log(`  chat : ${chatLink(l.phone as string, l.suggested_message)}`);
   }
   console.log(`\n${leads.length} lead belum dihubungi. Tandai setelah kirim: npm run cli -- mark <id>`);
+}
+
+async function cmdClean(opts: { dry: boolean; ai: boolean }): Promise<void> {
+  const rows = db.prepare('SELECT * FROM leads').all() as unknown as LeadRecord[];
+  if (!rows.length) return console.log('[clean] tidak ada lead');
+  const bl = loadBlocklist(undefined, true);
+
+  const blocked: LeadRecord[] = [];
+  const cands: Candidate[] = [];
+  const byKey = new Map<string, LeadRecord>();
+  for (const r of rows) {
+    if (isBadCandidate({ name: r.name, bio: r.bio, website: r.website, url: r.url, handle: r.handle }, bl)) {
+      blocked.push(r);
+      continue;
+    }
+    const c: Candidate = {
+      source: r.source,
+      handle: r.handle ?? undefined,
+      name: r.name,
+      city: r.city ?? undefined,
+      bio: r.bio ?? undefined,
+      website: r.website ?? undefined,
+      url: r.url ?? undefined,
+      phone: r.phone ?? undefined,
+    };
+    cands.push(c);
+    byKey.set(candidateKey(c), r);
+  }
+
+  let dropLeads: LeadRecord[] = [];
+  if (opts.ai) {
+    const { dropped } = await filterCandidates(cands, undefined, { ai: true });
+    dropLeads = dropped.map((d) => byKey.get(d.key)).filter((x): x is LeadRecord => !!x);
+  }
+
+  const all = [...blocked, ...dropLeads];
+  console.log(`[clean] total lead: ${rows.length}`);
+  console.log(`[clean] bloklist    : ${blocked.length}`);
+  if (opts.ai) console.log(`[clean] tak relevan : ${dropLeads.length}`);
+
+  for (const r of all.slice(0, 15)) console.log(`  #${r.id} ${r.name} [${r.source}] ${r.phone ?? '-'}`);
+  if (all.length > 15) console.log(`  ... dan ${all.length - 15} lagi`);
+
+  if (opts.dry) {
+    console.log('[clean] DRY RUN — tidak ada yang dihapus. Jalankan tanpa --dry untuk hapus permanen.');
+    return;
+  }
+  for (const r of all) deleteLead(r.id);
+  addRejected(all.map((r) => ({ key: r.phone ?? `${r.source}:${r.handle ?? r.name}`, name: r.name, source: r.source, reason: 'clean' })));
+  console.log(`[clean] dihapus permanen: ${all.length}`);
+}
+
+function cmdBlock(args: string[]): void {
+  const value = args[0];
+  if (!value) return console.log('pakai: block <kata|domain>');
+  const line = appendBlocklist(value);
+  console.log(`[block] ditambahkan ke blocklist.txt: ${line}`);
 }
 
 function cmdMark(ids: string[]): void {
@@ -258,7 +261,7 @@ function cmdStats(): void {
   const dnc = db.prepare('SELECT COUNT(*) AS n FROM suppression').get() as { n: number };
   const campaigns = db.prepare('SELECT COUNT(*) AS n FROM campaigns').get() as { n: number };
   console.log(`leads=${total.n} withPhone=${withPhone.n} scored=${scored.n} contacted=${contacted.n}`);
-  console.log(`campaigns=${campaigns.n} dnc=${dnc.n}`);
+  console.log(`campaigns=${campaigns.n} dnc=${dnc.n} rejected=${countRejected()}`);
   console.log(`AI=${hasAI ? 'on' : 'off'} maps=${hasMaps ? 'on' : 'off'} minScore=${config.minScore}`);
 }
 
@@ -276,6 +279,8 @@ function usage(): void {
   npm run cli -- contacts                 lead siap dihubungi + link wa.me
   npm run cli -- mark <id...>             tandai sudah dihubungi
   npm run cli -- suppress <nomor> [note]  masukkan ke DNC list
+  npm run cli -- clean [--dry] [--ai]     hapus lead sampah (bloklist; --ai = relevansi AI)
+  npm run cli -- block <kata|domain>      tambah ke blocklist.txt
   npm run cli -- export [file] [--new]    export CSV (--new = belum dihubungi)
   npm run cli -- stats                    ringkasan database
   npm run cli -- doctor                   cek lingkungan (node, AI, IG, python, auth)
@@ -319,6 +324,12 @@ async function main(): Promise<void> {
       break;
     case 'suppress':
       cmdSuppress(positional);
+      break;
+    case 'clean':
+      await cmdClean({ dry: flags.dry === true, ai: flags.ai === true });
+      break;
+    case 'block':
+      cmdBlock(positional);
       break;
     case 'export':
       cmdExport(positional[0] ?? 'leads.csv', flags.new === true);

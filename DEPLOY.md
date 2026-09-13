@@ -232,48 +232,48 @@ ig/venv/bin/pip install -r ig/requirements.txt
 sudo systemctl restart number-scrap-web
 ```
 
-## 15. Akses dari HP tanpa domain
+## 15. Akses dashboard dari HP
 
-Dashboard bind ke `127.0.0.1`, jadi harus lewat terowongan. **Jangan** buka port 3100 langsung ke internet (tanpa TLS). Pilih salah satu:
+Dashboard bind ke `127.0.0.1`, jadi harus lewat terowongan. **Jangan** buka port 3100 langsung ke internet (tanpa TLS).
 
-### Opsi A — Tailscale (privat, tidak dibuka ke internet) — disarankan
+### Opsi A — Named tunnel Cloudflare (URL TETAP) — disarankan
 
-```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up          # login, tautkan akun
-tailscale serve --bg 3100  # proxy tailnet -> 127.0.0.1:3100
-tailscale serve status
-```
-Di HP: install app **Tailscale**, login akun yang sama, lalu buka:
-```
-https://<nama-vps>.<tailnet>.ts.net
-```
-HTTPS otomatis, tidak terlihat publik, tidak perlu buka firewall. Dashboard tetap minta basic auth.
-
-### Opsi B — Cloudflare Tunnel (URL publik instan, tanpa akun/domain)
+Butuh domain yang nameserver-nya sudah diarahkan ke Cloudflare.
 
 ```bash
-curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
-chmod +x /usr/local/bin/cloudflared
-cloudflared --version
+# 1. login (buka link yang tercetak, pilih domainmu)
+cloudflared tunnel login
 
-# uji manual (Ctrl+C untuk stop)
-PORT=3100 bash scripts/tunnel.sh
+# 2. buat tunnel
+cloudflared tunnel create number-scrap
+
+# 3. arahkan subdomain ke tunnel
+cloudflared tunnel route dns number-scrap lead.DOMAINMU.com
+
+# 4. config
+sudo mkdir -p /etc/cloudflared
+sudo tee /etc/cloudflared/config.yml >/dev/null <<EOF
+tunnel: number-scrap
+credentials-file: $HOME/.cloudflared/$(basename $(ls $HOME/.cloudflared/*.json | head -1))
+ingress:
+  - hostname: lead.DOMAINMU.com
+    service: http://127.0.0.1:3100
+  - service: http_status:404
+EOF
 ```
-Muncul URL `https://xxxx.trycloudflare.com` → buka di HP. URL **berubah tiap restart**.
 
-Jadikan service supaya hidup terus:
+Jadikan service + matikan quick tunnel lama:
 ```bash
-sudo tee /etc/systemd/system/cloudflared-quick.service >/dev/null <<'EOF'
+sudo systemctl disable --now cloudflared-quick 2>/dev/null || true
+
+sudo tee /etc/systemd/system/cloudflared-named.service >/dev/null <<'EOF'
 [Unit]
-Description=Cloudflare quick tunnel untuk number-scrap
+Description=Cloudflare named tunnel (number-scrap)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-WorkingDirectory=/opt/number-scrap
-Environment=PORT=3100
-ExecStart=/usr/bin/bash scripts/tunnel.sh
+ExecStart=/usr/local/bin/cloudflared tunnel --config /etc/cloudflared/config.yml run
 Restart=always
 RestartSec=5
 
@@ -282,20 +282,34 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now cloudflared-quick
+sudo systemctl enable --now cloudflared-named
+sudo systemctl status cloudflared-named --no-pager
 ```
 
-Ambil URL publiknya (ini yang dibuka di HP):
+Buka `https://lead.DOMAINMU.com` di HP — **URL ini tidak berubah** walau VPS/cloudflared restart.
+
+Cek:
 ```bash
-journalctl -u cloudflared-quick -n 50 --no-pager | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com'
+cloudflared tunnel list
+curl -sI https://lead.DOMAINMU.com | head -1        # 401 (basic auth aktif)
 ```
 
-> Ini **membuka dashboard ke internet**. `DASH_PASS` wajib kuat (>=12 karakter, cek `npm run cli -- doctor`).
-> Stop kapan saja: `sudo systemctl stop cloudflared-quick`.
+### Opsi B — Quick tunnel (tanpa domain, URL berubah)
+Lihat `scripts/tunnel.sh` + service `cloudflared-quick` (URL `*.trycloudflare.com`, berganti tiap restart).
+
+### Opsi C — Tailscale (privat, tanpa publik)
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+tailscale serve --bg 3100
+```
+Buka `https://<nama-vps>.<tailnet>.ts.net` dari HP (install app Tailscale).
+
+> `DASH_PASS` wajib kuat (>=12 karakter, cek `npm run cli -- doctor`).
 
 ### Yang tidak disarankan
 ```bash
-ufw allow 3100        # jangan — HTTP polos, dasar, rawan
+ufw allow 3100        # HTTP polos, dasar, rawan
 ```
 
 ## 16. Troubleshooting

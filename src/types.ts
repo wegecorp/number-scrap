@@ -47,6 +47,7 @@ export type LeadRecord = {
   meta: string | null;
   suggested_message: string | null;
   contacted_at: string | null;
+  campaign_id: number | null;
   created_at: string;
   updated_at: string;
 };

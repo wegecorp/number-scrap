@@ -8,6 +8,8 @@ import { mentionsFromBio, instaRecordToCandidate } from './discovery/adapters/in
 import { mapOsmResult } from './discovery/adapters/osm.ts';
 import { isSearchJunk } from './discovery/web-search.ts';
 import { searchTerms, cityVariants } from './discovery/index.ts';
+import { isBadText, isBadUrl, isBadCandidate, blockTargetForLead } from './filter/blocklist.ts';
+import { isRelevant } from './filter/relevance.ts';
 
 let pass = 0;
 function test(name: string, fn: () => void): void {
@@ -126,6 +128,25 @@ test('searchTerms: hasil banyak & ada varian kota', () => {
   assert.ok(terms.length >= 4 && terms.length <= 8);
   assert.ok(terms.some((t) => t.includes('jaksel')));
   assert.ok(terms.includes('ssb'));
+});
+test('bloklist: teks/url/host', () => {
+  assert.equal(isBadText('situs bokep terbaru'), true);
+  assert.equal(isBadText('SSB Garuda Bandung'), false);
+  assert.equal(isBadUrl('https://bit.ly/xyz'), true);
+  assert.equal(isBadUrl('https://ssbgaruda.id/kontak'), false);
+  assert.equal(isBadCandidate({ name: 'slot gacor', website: null }), true);
+});
+test('relevansi: sport cocok, maps/osm dipercaya, acak ditolak', () => {
+  const q = { sport: 'sepak bola', targetType: 'ssb', city: 'Bandung', googleQueries: [], hashtags: [], synonyms: [] };
+  assert.equal(isRelevant({ source: 'instagram', name: 'SSB Garuda', handle: 'ssbgaruda' }, q), true);
+  assert.equal(isRelevant({ source: 'google-maps', name: 'Toko Bangunan Jaya' }, q), true);
+  assert.equal(isRelevant({ source: 'instagram', name: 'Kedai Kopi Senja', handle: 'kopisenja', bio: 'jual kopi' }, q), false);
+});
+test('blockTargetForLead: pakai handle untuk platform, host untuk situs sendiri', () => {
+  assert.equal(blockTargetForLead({ website: 'https://www.instagram.com/x', handle: 'ssbx', name: 'SSB X' }), 'ssbx');
+  assert.equal(blockTargetForLead({ website: 'https://linktr.ee/ssbx', handle: 'ssbx', name: 'SSB X' }), 'ssbx');
+  assert.equal(blockTargetForLead({ website: 'https://spamsite.example/page', handle: 'x', name: 'X' }), 'spamsite.example');
+  assert.equal(blockTargetForLead({ website: null, handle: null, name: 'SSB Tanpa Handle' }), 'SSB Tanpa Handle');
 });
 
 console.log(`\n${pass} check lulus${process.exitCode ? ' (ada gagal)' : ''}`);
