@@ -2,6 +2,7 @@ import { config } from '../../config.ts';
 import { normalizePhone } from '../../enrich/phone.ts';
 import type { Candidate } from '../../types.ts';
 import { webSearch } from '../web-search.ts';
+import { spawn } from 'node:child_process';
 
 const RESERVED = new Set(['p', 'reel', 'reels', 'explore', 'tv', 'stories', 'accounts', 'direct', 'about']);
 
@@ -184,3 +185,114 @@ export async function fetchInstagramProfile(handle: string): Promise<Candidate> 
     },
   };
 }
+
+// ponytail: batch lewat satu spawn Python (instagrapi). Tambah retry kalau perlu.
+export type InstaRecord = {
+  username?: string;
+  full_name?: string;
+  biography?: string;
+  external_url?: string | null;
+  bio_links?: string[];
+  public_phone_number?: string | null;
+  contact_phone_number?: string | null;
+  public_email?: string | null;
+  follower_count?: number | null;
+  media_count?: number | null;
+  is_business?: boolean;
+  is_private?: boolean;
+  category_name?: string | null;
+  error?: string;
+};
+
+export function instaRecordToCandidate(rec: InstaRecord): Candidate {
+  const handle = (rec.username ?? '').replace(/^@/, '');
+  const rawPhone = (rec.public_phone_number || rec.contact_phone_number || '').toString();
+  const links = rec.bio_links ?? [];
+  const website = rec.external_url || links[0] || undefined;
+  return {
+    source: 'instagram',
+    handle,
+    name: rec.full_name || handle,
+    bio: rec.biography || undefined,
+    website,
+    phone: rawPhone ? normalizePhone(rawPhone) ?? undefined : undefined,
+    rawPhone: rawPhone || undefined,
+    email: rec.public_email || undefined,
+    url: `https://www.instagram.com/${handle}`,
+    meta: {
+      backend: 'instagrapi',
+      followers: rec.follower_count ?? null,
+      posts: rec.media_count ?? null,
+      isBusiness: rec.is_business ?? false,
+      isPrivate: rec.is_private ?? false,
+      category: rec.category_name ?? null,
+      bioLinks: links,
+      externalUrl: rec.external_url ?? null,
+      error: rec.error ?? null,
+    },
+  };
+}
+
+export async function fetchProfilesViaInstagrapi(handles: string[]): Promise<Candidate[]> {
+  if (!handles.length) return [];
+  const child = spawn(config.pythonBin, ['ig/ig_fetch.py'], { cwd: process.cwd() });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+  child.stderr.on('data', (d: Buffer) => {
+    const text = d.toString();
+    stderr += text;
+    for (const line of text.split('\n')) if (line.trim()) console.warn(line.trim());
+  });
+  const closed = new Promise<number | null>((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', (code) => resolve(code));
+  });
+  child.stdin.write(JSON.stringify(handles));
+  child.stdin.end();
+
+  const code = await closed;
+  if (code !== 0 && !stdout.trim()) throw new Error(`instagrapi exit ${code}: ${stderr.slice(-200)}`);
+
+  const out: Candidate[] = [];
+  for (const line of stdout.split('\n')) {
+    const s = line.trim();
+    if (!s) continue;
+    try {
+      out.push(instaRecordToCandidate(JSON.parse(s) as InstaRecord));
+    } catch {
+      /* lewati baris rusak */
+    }
+  }
+  return out;
+}
+
+export async function searchHandlesViaInstagrapi(queries: string[]): Promise<string[]> {
+  if (!queries.length) return [];
+  const child = spawn(config.pythonBin, ['ig/ig_search.py'], { cwd: process.cwd() });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+  child.stderr.on('data', (d: Buffer) => {
+    const text = d.toString();
+    stderr += text;
+    for (const line of text.split('\n')) if (line.trim()) console.warn(line.trim());
+  });
+  const closed = new Promise<number | null>((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', (code) => resolve(code));
+  });
+  child.stdin.write(JSON.stringify(queries));
+  child.stdin.end();
+
+  const code = await closed;
+  const trimmed = stdout.trim();
+  if (code !== 0 && !trimmed) throw new Error(`instagrapi search exit ${code}: ${stderr.slice(-200)}`);
+  try {
+    const arr = JSON.parse(trimmed || '[]') as unknown;
+    return Array.isArray(arr) ? arr.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+

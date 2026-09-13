@@ -30,6 +30,8 @@ export const config = {
   googleMapsKey: env('GOOGLE_MAPS_API_KEY'),
   igSessionId: env('IG_SESSIONID'),
   igFetchDelayMs: Number(env('IG_FETCH_DELAY_MS', '2500')),
+  igBackend: env('IG_BACKEND', 'auto') as 'auto' | 'web' | 'instagrapi',
+  pythonBin: env('PYTHON_BIN', process.platform === 'win32' ? 'ig/venv/Scripts/python.exe' : 'ig/venv/bin/python'),
   osmEnabled: env('OSM_ENABLED', '1') !== '0',
   osmUserAgent: env('OSM_UA', 'number-scrap/0.1 (+https://github.com/wegecorp/number-scrap)'),
   ai: {

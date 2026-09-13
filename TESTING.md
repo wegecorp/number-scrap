@@ -50,6 +50,28 @@ Jadi kalau Maps tak tersedia, **prioritas ke IG**: pastikan `IG_SESSIONID` beres
 3. Cari cookie `sessionid`, copy nilainya ke `.env` (jangan URL-encode)
 4. Akun ini berisiko dibatasi — jangan pakai akun utama
 
+### Sidecar Instagram (instagrapi)
+
+Endpoint web IG sering 429. Sidecar Python pakai private API lewat `sessionid`, jadi tetap bisa baca bio/link-in-bio.
+
+```powershell
+python -m venv ig/venv
+ig/venv/Scripts/pip install instagrapi
+
+# .env
+# IG_BACKEND=auto
+# PYTHON_BIN=ig/venv/Scripts/python.exe
+
+# verifikasi sebelum run panjang:
+ig/venv/Scripts/python ig/ig_check.py ssbsetiabandung
+```
+
+Harapan: keluar JSON berisi `full_name`, `biography`, `follower_count`.
+- `challenge_required` → akun perlu verifikasi / butuh proxy
+- `LoginRequired` → `IG_SESSIONID` kedaluwarsa, ambil ulang
+
+Windows: pakai `ig/venv/Scripts/...`. VPS/Linux: `ig/venv/bin/...` dan set `PYTHON_BIN=ig/venv/bin/python`.
+
 ## 3. Cek AI dulu (sebelum run panjang)
 
 ```powershell

@@ -4,7 +4,7 @@ import { decodeInstagramWrapper, isAggregator, extractChildLinks } from './enric
 import { heuristicExpand } from './ai/expand.ts';
 import { fillTemplate, templateFor } from './outreach/templates.ts';
 import { chatLink } from './outreach/chat-link.ts';
-import { mentionsFromBio } from './discovery/adapters/instagram.ts';
+import { mentionsFromBio, instaRecordToCandidate } from './discovery/adapters/instagram.ts';
 import { mapOsmResult } from './discovery/adapters/osm.ts';
 import { isSearchJunk } from './discovery/web-search.ts';
 
@@ -97,6 +97,24 @@ test('isSearchJunk buang host pencarian, simpan situs biasa', () => {
   assert.equal(isSearchJunk('https://duckduckgo.com/'), true);
   assert.equal(isSearchJunk('https://web.archive.org/web/x'), true);
   assert.equal(isSearchJunk('https://ssbgaruda.id/kontak'), false);
+});
+test('instaRecordToCandidate: nomor, website, meta', () => {
+  const c = instaRecordToCandidate({
+    username: 'ssbgaruda',
+    full_name: 'SSB Garuda',
+    biography: 'SSB di Bandung',
+    public_phone_number: '0812-3456-7890',
+    external_url: 'https://linktr.ee/x',
+    follower_count: 1200,
+    is_business: true,
+  });
+  assert.equal(c.phone, '+6281234567890');
+  assert.equal(c.website, 'https://linktr.ee/x');
+  assert.equal((c.meta as { followers?: number }).followers, 1200);
+});
+test('instaRecordToCandidate: pakai bio_links kalau external_url kosong', () => {
+  const c = instaRecordToCandidate({ username: 'a', bio_links: ['https://wa.me/6281234567890'] });
+  assert.equal(c.website, 'https://wa.me/6281234567890');
 });
 
 console.log(`\n${pass} check lulus${process.exitCode ? ' (ada gagal)' : ''}`);

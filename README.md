@@ -26,12 +26,32 @@ npm run cli -- ping-ai        # pastikan koneksi AI jalan
 npm run cli -- stats
 ```
 
+### Sidecar Instagram (instagrapi)
+
+Endpoint web IG sering balas **429**. Sidecar Python memakai private API (via `sessionid`, tanpa password) sehingga tetap bisa baca bio/link-in-bio.
+
+```bash
+python -m venv ig/venv
+ig/venv/Scripts/pip install instagrapi          # Windows
+# VPS/Linux: ig/venv/bin/pip install instagrapi
+
+ig/venv/Scripts/python ig/ig_check.py ssbsetiabandung   # verifikasi
+```
+
+Set di `.env`:
+- `IG_SESSIONID` — cookie `sessionid` akun IG burner
+- `IG_BACKEND=auto` — instagrapi dulu, fallback ke web
+- `PYTHON_BIN` — `ig/venv/Scripts/python.exe` (Windows) / `ig/venv/bin/python` (VPS)
+- `IG_PROXY_URL` — opsional, kalau IP kena limit
+
 ### Env penting
 
 | Variabel | Fungsi |
 |---|---|
 | `OFFER` | produk/jasa yang kamu jual (menentukan skor AI + isi pesan) |
 | `IG_SESSIONID` | cookie IG burner; tanpa ini profil IG balas 429 |
+| `IG_BACKEND` | `auto` (instagrapi→web) / `instagrapi` / `web` |
+| `PYTHON_BIN` | python venv untuk sidecar instagrapi |
 | `IG_FETCH_DELAY_MS` | jeda antar-fetch profil IG (naikkan kalau kena limit) |
 | `OSM_ENABLED` | OpenStreetMap/Nominatim — gratis tanpa key (hasil tipis, bonus) |
 | `GOOGLE_MAPS_API_KEY` | Places API (New) — opsional, butuh kartu kredit |
